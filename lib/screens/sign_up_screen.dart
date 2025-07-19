@@ -87,7 +87,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                 decoration: InputDecoration(
                   labelText: 'Full Name',
                   border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.person),
+                  prefixIcon: Icon(Icons.person, color: Colors.purple),
                 ),
                 validator: (value) => value == null || value.isEmpty ? 'Enter your name' : null,
               ),
@@ -97,7 +97,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                 decoration: InputDecoration(
                   labelText: 'Email',
                   border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.email),
+                  prefixIcon: Icon(Icons.email, color: Colors.purple),
                 ),
                 keyboardType: TextInputType.emailAddress,
                 validator: (value) {
@@ -112,7 +112,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                 decoration: InputDecoration(
                   labelText: 'Phone Number',
                   border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.phone),
+                  prefixIcon: Icon(Icons.phone, color: Colors.purple),
                 ),
                 keyboardType: TextInputType.phone,
                 validator: (value) => value == null || value.isEmpty ? 'Enter your phone number' : null,
@@ -123,7 +123,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                 decoration: InputDecoration(
                   labelText: 'Address',
                   border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.home),
+                  prefixIcon: Icon(Icons.home, color: Colors.purple),
                 ),
                 validator: (value) => value == null || value.isEmpty ? 'Enter your address' : null,
               ),
@@ -133,9 +133,9 @@ class _SignUpScreenState extends State<SignUpScreen> {
                 decoration: InputDecoration(
                   labelText: 'Password',
                   border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.lock),
+                  prefixIcon: Icon(Icons.lock, color: Colors.purple),
                   suffixIcon: IconButton(
-                    icon: Icon(_obscurePassword ? Icons.visibility : Icons.visibility_off),
+                    icon: Icon(_obscurePassword ? Icons.visibility : Icons.visibility_off, color: Colors.purple),
                     onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
                   ),
                 ),
@@ -148,9 +148,9 @@ class _SignUpScreenState extends State<SignUpScreen> {
                 decoration: InputDecoration(
                   labelText: 'Confirm Password',
                   border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.lock_outline),
+                  prefixIcon: Icon(Icons.lock, color: Colors.purple),
                   suffixIcon: IconButton(
-                    icon: Icon(_obscureConfirmPassword ? Icons.visibility : Icons.visibility_off),
+                    icon: Icon(_obscureConfirmPassword ? Icons.visibility : Icons.visibility_off, color: Colors.purple),
                     onPressed: () => setState(() => _obscureConfirmPassword = !_obscureConfirmPassword),
                   ),
                 ),
@@ -168,7 +168,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                   labelText: 'DID',
                   hintText: 'did:iota:example:yourid',
                   border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.fingerprint, color: Colors.teal),
+                  prefixIcon: Icon(Icons.fingerprint, color: Colors.purple),
                 ),
                 validator: (value) {
                   if (value == null || value.isEmpty || value == 'did:') return 'Enter your DID';

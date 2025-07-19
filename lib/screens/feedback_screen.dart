@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+import 'dashboard_screen.dart' show getBackendBaseUrl;
 
 class FeedbackScreen extends StatefulWidget {
   @override
@@ -26,38 +29,37 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
       setState(() {
         _isSubmitting = true;
       });
-      await Future.delayed(Duration(seconds: 2));
+      await Future.delayed(Duration(seconds: 1));
       setState(() {
         _isSubmitting = false;
       });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Row(
-            children: [
-              Icon(Icons.check_circle, color: Colors.white),
-              SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  "Feedback submitted successfully and notarized on IOTA!",
-                  style: TextStyle(fontSize: 16),
-                ),
+      final snackBar = SnackBar(
+        content: Row(
+          children: [
+            Icon(Icons.check_circle, color: Colors.white),
+            SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                "Feedback submitted successfully!",
+                style: TextStyle(fontSize: 16),
               ),
-            ],
-          ),
-          backgroundColor: Colors.purple,
-          duration: Duration(milliseconds: 1200),
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(8),
-          ),
-          margin: EdgeInsets.only(bottom: 40, left: 16, right: 16),
+            ),
+          ],
         ),
+        backgroundColor: Colors.purple,
+        duration: Duration(milliseconds: 1200),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(8),
+        ),
+        margin: EdgeInsets.only(bottom: 40, left: 16, right: 16),
       );
+      ScaffoldMessenger.of(context).showSnackBar(snackBar);
       feedbackController.clear();
       setState(() {
         _selectedCategory = 'General Policy';
       });
-      await Future.delayed(Duration(milliseconds: 700));
+      await Future.delayed(snackBar.duration);
       if (mounted) Navigator.of(context).pop();
     }
   }
@@ -287,5 +289,55 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
   void dispose() {
     feedbackController.dispose();
     super.dispose();
+  }
+}
+
+class NotarizationReceiptPage extends StatelessWidget {
+  final String party;
+  final String receipt;
+  final String message;
+
+  const NotarizationReceiptPage({required this.party, required this.receipt, required this.message});
+
+  @override
+  Widget build(BuildContext context) {
+    final purple = Theme.of(context).primaryColor;
+    return Scaffold(
+      appBar: AppBar(title: Text('Notarization Receipt'), backgroundColor: purple),
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Icon(Icons.verified, color: purple, size: 64),
+              SizedBox(height: 24),
+              Text('Your submission for', style: TextStyle(fontSize: 18)),
+              SizedBox(height: 8),
+              Text(party, style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: purple)),
+              SizedBox(height: 16),
+              Text(message, style: TextStyle(fontSize: 16)),
+              SizedBox(height: 24),
+              Text('Notarization Receipt:', style: TextStyle(fontWeight: FontWeight.bold)),
+              SizedBox(height: 8),
+              SelectableText(receipt, style: TextStyle(fontSize: 16, color: Colors.black87)),
+              SizedBox(height: 32),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: purple,
+                  padding: EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                ),
+                onPressed: () {
+                  Navigator.of(context).popUntil((route) => route.isFirst);
+                },
+                child: Text('Back to Home', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 } 

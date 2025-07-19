@@ -1,12 +1,24 @@
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'dart:convert'; // Added for jsonDecode
+import 'dart:io' show Platform;
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:fl_chart/fl_chart.dart';
 
-Future<void> checkBackend() async {
-  final response = await http.get(Uri.parse('http://localhost:8080/health'));
-  if (response.statusCode == 200) {
-    print('Backend is running: \\${response.body}');
-  } else {
-    print('Backend error: \\${response.statusCode}');
+String getBackendBaseUrl() {
+  return 'http://127.0.0.1:3000';
+}
+
+Future<void> checkBackendHealth() async {
+  try {
+    final response = await http.get(Uri.parse('http://127.0.0.1:8080/health'));
+    if (response.statusCode == 200) {
+      print('Backend health: \\${response.body}');
+    } else {
+      print('Backend health check failed: \\${response.statusCode}');
+    }
+  } catch (e) {
+    print('Failed to connect to backend: \\${e}');
   }
 }
 
@@ -234,6 +246,62 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 }
 
+class VerifyIdentityPage extends StatefulWidget {
+  @override
+  _VerifyIdentityPageState createState() => _VerifyIdentityPageState();
+}
+
+class _VerifyIdentityPageState extends State<VerifyIdentityPage> {
+  bool _verifying = true;
+  bool _verified = false;
+
+  @override
+  void initState() {
+    super.initState();
+    Future.delayed(Duration(milliseconds: 1600), () async {
+      setState(() {
+        _verifying = false;
+        _verified = true;
+      });
+      await Future.delayed(Duration(milliseconds: 500));
+      if (mounted) {
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (_) => ElectionVotingPage()),
+        );
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final purple = Theme.of(context).primaryColor;
+    return Scaffold(
+      appBar: AppBar(title: Text('Verify Identity'), backgroundColor: purple),
+      body: Center(
+        child: _verifying
+            ? Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  CircularProgressIndicator(color: purple),
+                  SizedBox(height: 24),
+                  Text('Verifying your identity...', style: TextStyle(fontSize: 18)),
+                ],
+              )
+            : Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.verified, color: purple, size: 64),
+                  SizedBox(height: 24),
+                  Text('Identity Verified!', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: purple)),
+                  SizedBox(height: 24),
+                  // Button removed, auto navigation after 1s
+                ],
+              ),
+      ),
+    );
+  }
+}
+
 class _HomePage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
@@ -251,10 +319,11 @@ class _HomePage extends StatelessWidget {
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
-              borderRadius: BorderRadius.only(
-                bottomLeft: Radius.circular(32),
-                bottomRight: Radius.circular(32),
-              ),
+              // Remove rounded corners for sharp vertices
+              // borderRadius: BorderRadius.only(
+              //   bottomLeft: Radius.circular(32),
+              //   bottomRight: Radius.circular(32),
+              // ),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -461,7 +530,7 @@ class _HomePage extends StatelessWidget {
                           GestureDetector(
                             onTap: () {
                               Navigator.of(context).push(
-                                MaterialPageRoute(builder: (_) => ElectionVotingPage()),
+                                MaterialPageRoute(builder: (_) => VerifyIdentityPage()),
                               );
                             },
                             child: Row(
@@ -583,51 +652,111 @@ class AnalyticsPage extends StatelessWidget {
   Widget build(BuildContext context) {
     final purple = Theme.of(context).primaryColor;
     return SafeArea(
-      child: Container(
-        width: double.infinity,
-        color: Colors.grey[200],
-        child: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24.0),
-            child: Container(
-              decoration: BoxDecoration(
-                color: Colors.grey[100],
-                borderRadius: BorderRadius.circular(24),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black12,
-                    blurRadius: 12,
-                    offset: Offset(0, 4),
-                  ),
-                ],
-              ),
-              padding: EdgeInsets.all(24),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.bar_chart, color: purple, size: 48),
-                  SizedBox(height: 16),
-                  Text('Analytics Dashboard', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: purple)),
-                  SizedBox(height: 12),
-                  Text('See voting trends, participation rates, and more. (Demo content)', textAlign: TextAlign.center, style: TextStyle(fontSize: 15)),
-                  SizedBox(height: 24),
-                  // Example analytics cards
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                    children: [
-                      _AnalyticsCard(title: 'Votes Cast', value: '1,234'),
-                      _AnalyticsCard(title: 'Feedbacks', value: '567'),
-                    ],
-                  ),
-                  SizedBox(height: 16),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                    children: [
-                      _AnalyticsCard(title: 'Active Policies', value: '8'),
-                      _AnalyticsCard(title: 'Participation', value: '76%'),
-                    ],
-                  ),
-                ],
+      child: SingleChildScrollView(
+        child: Container(
+          width: double.infinity,
+          color: Colors.grey[200],
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24.0),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Colors.grey[100],
+                  borderRadius: BorderRadius.circular(24),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black12,
+                      blurRadius: 12,
+                      offset: Offset(0, 4),
+                    ),
+                  ],
+                ),
+                padding: EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.bar_chart, color: purple, size: 48),
+                    SizedBox(height: 16),
+                    Text('Analytics Dashboard', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: purple)),
+                    SizedBox(height: 12),
+                    Text('See voting trends, participation rates, and more. (Demo content)', textAlign: TextAlign.center, style: TextStyle(fontSize: 15)),
+                    SizedBox(height: 24),
+                    // Main analytics cards
+                    Wrap(
+                      spacing: 16,
+                      runSpacing: 16,
+                      alignment: WrapAlignment.center,
+                      children: [
+                        _AnalyticsCard(title: 'Votes Cast', value: '1,234'),
+                        _AnalyticsCard(title: 'Feedbacks', value: '567'),
+                        _AnalyticsCard(title: 'Active Policies', value: '8'),
+                        _AnalyticsCard(title: 'Participation', value: '76%'),
+                        _AnalyticsCard(title: 'Registered Users', value: '2,345'),
+                        _AnalyticsCard(title: 'Avg. Feedback Score', value: '4.7'),
+                        _AnalyticsCard(title: 'Policies Passed', value: '5'),
+                        _AnalyticsCard(title: 'Voting Sessions', value: '12'),
+                      ],
+                    ),
+                    SizedBox(height: 32),
+                    // Pie chart section
+                    Text('Voter Classification by Income Group', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: purple)),
+                    SizedBox(height: 16),
+                    SizedBox(
+                      height: 220,
+                      child: PieChart(
+                        PieChartData(
+                          sections: [
+                            PieChartSectionData(
+                              color: Colors.deepPurple,
+                              value: 40,
+                              title: 'T20',
+                              radius: 50,
+                              titleStyle: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+                            ),
+                            PieChartSectionData(
+                              color: Colors.purpleAccent,
+                              value: 30,
+                              title: 'M40',
+                              radius: 50,
+                              titleStyle: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+                            ),
+                            PieChartSectionData(
+                              color: Colors.purple[200],
+                              value: 20,
+                              title: 'B40',
+                              radius: 50,
+                              titleStyle: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+                            ),
+                            PieChartSectionData(
+                              color: Colors.grey[400],
+                              value: 10,
+                              title: 'Others',
+                              radius: 50,
+                              titleStyle: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+                            ),
+                          ],
+                          sectionsSpace: 2,
+                          centerSpaceRadius: 30,
+                        ),
+                      ),
+                    ),
+                    SizedBox(height: 16),
+                    // Legend
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        _PieLegend(color: Colors.deepPurple, label: 'T20'),
+                        SizedBox(width: 16),
+                        _PieLegend(color: Colors.purpleAccent, label: 'M40'),
+                        SizedBox(width: 16),
+                        _PieLegend(color: Colors.purple[200]!, label: 'B40'),
+                        SizedBox(width: 16),
+                        _PieLegend(color: Colors.grey[400]!, label: 'Others'),
+                      ],
+                    ),
+                    SizedBox(height: 24),
+                  ],
+                ),
               ),
             ),
           ),
@@ -675,33 +804,56 @@ class PolicyPage extends StatelessWidget {
     'Digital Voting Rollout',
     'Youth Engagement Policy',
     'Green City Initiative',
+    'E-Government Expansion',
+    'Universal Broadband Access',
+    'Renewable Energy Mandate',
   ];
   final List<String> implementedPolicies = [
     'Public Transport Subsidy',
     'Healthcare Access Reform',
     'Smart City Infrastructure',
+    'Education Modernization',
+    'Affordable Housing Program',
+  ];
+  final List<String> delayedPolicies = [
+    'Water Conservation Act',
+    'Urban Traffic Decongestion',
+  ];
+  final List<String> reconstructedPolicies = [
+    'Tax Code Simplification',
+    'National Cybersecurity Plan',
   ];
 
   @override
   Widget build(BuildContext context) {
     final purple = Theme.of(context).primaryColor;
     return SafeArea(
-      child: Container(
-        width: double.infinity,
-        color: Colors.grey[200],
-        child: SingleChildScrollView(
-          padding: EdgeInsets.all(24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Upcoming Policies', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: purple)),
-              SizedBox(height: 12),
-              ...upcomingPolicies.map((policy) => _PolicyCard(policy: policy, status: 'Upcoming', color: purple)),
-              SizedBox(height: 32),
-              Text('Implemented Policies', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: purple)),
-              SizedBox(height: 12),
-              ...implementedPolicies.map((policy) => _PolicyCard(policy: policy, status: 'Implemented', color: Colors.green)),
-            ],
+      child: SingleChildScrollView(
+        child: Container(
+          width: double.infinity,
+          color: Colors.grey[200],
+          child: Padding(
+            padding: EdgeInsets.all(24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Upcoming Policies', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: purple)),
+                SizedBox(height: 12),
+                ...upcomingPolicies.map((policy) => _PolicyCard(policy: policy, status: 'Upcoming', color: purple)),
+                SizedBox(height: 32),
+                Text('Implemented Policies', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: purple)),
+                SizedBox(height: 12),
+                ...implementedPolicies.map((policy) => _PolicyCard(policy: policy, status: 'Implemented', color: Colors.green)),
+                SizedBox(height: 32),
+                Text('Delayed Policies', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.orange)),
+                SizedBox(height: 12),
+                ...delayedPolicies.map((policy) => _PolicyCard(policy: policy, status: 'Delayed', color: Colors.orange)),
+                SizedBox(height: 32),
+                Text('Reconstructed Policies', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.blue)),
+                SizedBox(height: 12),
+                ...reconstructedPolicies.map((policy) => _PolicyCard(policy: policy, status: 'Reconstructed', color: Colors.blue)),
+              ],
+            ),
           ),
         ),
       ),
@@ -1235,24 +1387,67 @@ class VotePolicyListPage extends StatelessWidget {
                       ),
                       onPressed: policy.votingOpen
                           ? () async {
-                              final scaffoldMessenger = ScaffoldMessenger.of(context);
-                              try {
-                                final response = await http.get(Uri.parse('http://127.0.0.1:8080/health'));
-                                if (response.statusCode == 200) {
-                                  scaffoldMessenger.showSnackBar(
-                                    SnackBar(content: Text('Backend is running: \\${response.body}')),
-                                  );
-                                } else {
-                                  scaffoldMessenger.showSnackBar(
-                                    SnackBar(content: Text('Backend error: \\${response.statusCode}')),
-                                  );
-                                }
-                              } catch (e, stack) {
-                                print('Error: $e');
-                                print('Stack: $stack');
-                                scaffoldMessenger.showSnackBar(
-                                  SnackBar(content: Text('Failed to connect to backend: $e')),
-                                );
+                              final selectedVote = await showDialog<String>(
+                                context: context,
+                                builder: (context) => Center(
+                                  child: ConstrainedBox(
+                                    constraints: BoxConstraints(maxWidth: 220), // Make dialog box smaller
+                                    child: AlertDialog(
+                                      title: Center(
+                                        child: Text(
+                                          'Cast Your Vote',
+                                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                                          textAlign: TextAlign.center,
+                                        ),
+                                      ),
+                                      content: Padding(
+                                        padding: const EdgeInsets.symmetric(vertical: 8.0),
+                                        child: Text(
+                                          'Do you support this policy?',
+                                          style: TextStyle(fontSize: 15),
+                                          textAlign: TextAlign.center,
+                                        ),
+                                      ),
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                      contentPadding: EdgeInsets.fromLTRB(18, 12, 18, 0),
+                                      actionsPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                                      actionsAlignment: MainAxisAlignment.center,
+                                      insetPadding: EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+                                      actions: [
+                                        ConstrainedBox(
+                                          constraints: BoxConstraints(maxWidth: 120),
+                                          child: ElevatedButton(
+                                            style: ElevatedButton.styleFrom(
+                                              backgroundColor: Theme.of(context).primaryColor,
+                                              foregroundColor: Colors.white,
+                                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                              padding: EdgeInsets.symmetric(vertical: 10),
+                                            ),
+                                            onPressed: () => Navigator.of(context).pop('no'),
+                                            child: Text('No', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+                                          ),
+                                        ),
+                                        SizedBox(width: 10),
+                                        ConstrainedBox(
+                                          constraints: BoxConstraints(maxWidth: 120),
+                                          child: ElevatedButton(
+                                            style: ElevatedButton.styleFrom(
+                                              backgroundColor: Theme.of(context).primaryColor,
+                                              foregroundColor: Colors.white,
+                                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                              padding: EdgeInsets.symmetric(vertical: 10),
+                                            ),
+                                            onPressed: () => Navigator.of(context).pop('yes'),
+                                            child: Text('Yes', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              );
+                              if (selectedVote != null) {
+                                await submitPolicyVote(context, policy.title, selectedVote);
                               }
                             }
                           : null,
@@ -1585,17 +1780,153 @@ class _PartyVotingPageState extends State<PartyVotingPage> {
                 ),
                 onPressed: selectedParty == null
                     ? null
-                    : () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('You voted for $selectedParty!')),
-                        );
-                        Navigator.of(context).popUntil((route) => route.isFirst);
+                    : () async {
+                        final scaffoldMessenger = ScaffoldMessenger.of(context);
+                        try {
+                          final response = await http.post(
+                            Uri.parse(getBackendBaseUrl() + '/vote'),
+                            headers: {'Content-Type': 'application/json'},
+                            body: jsonEncode({
+                              'user_id': 'some_user', // Replace with actual user ID if available
+                              'vote': selectedParty!,
+                            }),
+                          );
+                          if (response.statusCode == 200) {
+                            final data = jsonDecode(response.body);
+                            Navigator.of(context).pushReplacement(
+                              MaterialPageRoute(
+                                builder: (_) => NotarizationReceiptPage(
+                                  party: data['party'] ?? selectedParty!,
+                                  receipt: data['notarization_receipt'] ?? '',
+                                  message: data['message'] ?? 'Vote recorded.',
+                                ),
+                              ),
+                            );
+                          } else {
+                            scaffoldMessenger.showSnackBar(
+                              SnackBar(content: Text('Backend error: \\${response.statusCode}')),
+                            );
+                          }
+                        } catch (e) {
+                          scaffoldMessenger.showSnackBar(
+                            SnackBar(content: Text('Failed to connect to backend: \\${e}')),
+                          );
+                        }
                       },
               ),
             ),
           ],
         ),
       ),
+    );
+  }
+}
+
+// Add this function near the top of the file
+Future<void> submitPolicyVote(BuildContext context, String selectedPolicy, String selectedVote) async {
+  final scaffoldMessenger = ScaffoldMessenger.of(context);
+  try {
+    final response = await http.post(
+      Uri.parse(getBackendBaseUrl() + '/policy_vote'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'user_id': 'some_user', // Replace with actual user ID if available
+        'policy': selectedPolicy,
+        'vote': selectedVote,
+      }),
+    );
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(
+          builder: (_) => NotarizationReceiptPage(
+            party: data['policy'] ?? selectedPolicy,
+            receipt: data['notarization_receipt'] ?? '',
+            message: data['message'] ?? 'Policy vote recorded.',
+          ),
+        ),
+      );
+    } else {
+      scaffoldMessenger.showSnackBar(
+        SnackBar(content: Text('Backend error: \\${response.statusCode}')),
+      );
+    }
+  } catch (e) {
+    scaffoldMessenger.showSnackBar(
+      SnackBar(content: Text('Failed to connect to backend: \\${e}')),
+    );
+  }
+}
+
+// Add this widget before _DashboardScreenState
+class NotarizationReceiptPage extends StatelessWidget {
+  final String party;
+  final String receipt;
+  final String message;
+
+  const NotarizationReceiptPage({required this.party, required this.receipt, required this.message});
+
+  @override
+  Widget build(BuildContext context) {
+    final purple = Theme.of(context).primaryColor;
+    return Scaffold(
+      appBar: AppBar(title: Text('Notarization Receipt'), backgroundColor: purple),
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Icon(Icons.verified, color: purple, size: 64),
+              SizedBox(height: 24),
+              Text('Your vote for', style: TextStyle(fontSize: 18)),
+              SizedBox(height: 8),
+              Text(party, style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: purple)),
+              SizedBox(height: 16),
+              Text(message, style: TextStyle(fontSize: 16)),
+              SizedBox(height: 24),
+              Text('Notarization Receipt:', style: TextStyle(fontWeight: FontWeight.bold)),
+              SizedBox(height: 8),
+              SelectableText(receipt, style: TextStyle(fontSize: 16, color: Colors.black87)),
+              SizedBox(height: 32),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: purple,
+                    padding: EdgeInsets.symmetric(vertical: 22),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                    textStyle: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                    elevation: 4,
+                  ),
+                  onPressed: () {
+                    Navigator.of(context).popUntil((route) => route.isFirst);
+                  },
+                  child: Text('Back to Home', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PieLegend extends StatelessWidget {
+  final Color color;
+  final String label;
+  const _PieLegend({required this.color, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Container(width: 16, height: 16, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
+        SizedBox(width: 6),
+        Text(label, style: TextStyle(fontSize: 14)),
+      ],
     );
   }
 } 
