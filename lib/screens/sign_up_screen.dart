@@ -12,445 +12,740 @@
 /// - Responsive design for mobile and desktop
 
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
-import 'dart:convert';
+import 'package:file_picker/file_picker.dart';
+import 'dart:async';
+import 'package:gov_vote/api_service.dart';
 
-/// Sign-up screen widget that handles user registration
-/// 
-/// This widget manages the complete registration flow:
-/// 1. User fills out registration form
-/// 2. Form validation ensures data integrity
-/// 3. Backend API call generates DID
-/// 4. Success screen displays generated DID
-/// 5. Navigation to dashboard
-class SignUpScreen extends StatefulWidget {
+class RegisterPage extends StatefulWidget {
   @override
-  _SignUpScreenState createState() => _SignUpScreenState();
+  _RegisterPageState createState() => _RegisterPageState();
 }
 
-/// State class for the sign-up screen
-/// 
-/// Manages form state, validation, API calls, and UI updates
-class _SignUpScreenState extends State<SignUpScreen> {
-  // Form validation key for form validation
-  final _formKey = GlobalKey<FormState>();
-  
-  // Text controllers for form input fields
-  final TextEditingController nameController = TextEditingController();
-  final TextEditingController emailController = TextEditingController();
-  final TextEditingController phoneController = TextEditingController();
-  final TextEditingController addressController = TextEditingController();
-  final TextEditingController passwordController = TextEditingController();
-  final TextEditingController confirmPasswordController = TextEditingController();
-  
-  // UI state variables
-  bool _isLoading = false; // Loading state for API calls
-  bool _obscurePassword = true; // Password visibility toggle
-  bool _obscureConfirmPassword = true; // Confirm password visibility toggle
+class _RegisterPageState extends State<RegisterPage> {
+  int _currentStep = 0;
+  String? _selectedFileName;
+  PlatformFile? _selectedFile;
+
+  // Personal Info
+  final _personalFormKey = GlobalKey<FormState>();
+  final TextEditingController _nameController = TextEditingController();
+  final TextEditingController _emailController = TextEditingController();
+  final TextEditingController _phoneController = TextEditingController();
+
+  // Identity Info
+  final _identityFormKey = GlobalKey<FormState>();
+  final TextEditingController _addressController = TextEditingController();
+  final TextEditingController _dobController = TextEditingController();
+  final TextEditingController _nationalityController = TextEditingController();
+
+  // Step 2: Personal Info
+  String? _nationalityValue;
+  String? _salaryRangeValue;
+  final TextEditingController _occupationController = TextEditingController();
+
+  // Add new controllers for NRIC and nationality text field:
+  final TextEditingController _nricController = TextEditingController();
+  final TextEditingController _nationalityTextController = TextEditingController();
+
+  late BuildContext _rootContext;
 
   @override
-  void initState() {
-    super.initState();
+  void dispose() {
+    _nameController.dispose();
+    _emailController.dispose();
+    _phoneController.dispose();
+    _addressController.dispose();
+    _dobController.dispose();
+    _nationalityController.dispose();
+    _occupationController.dispose();
+    _nricController.dispose();
+    super.dispose();
   }
 
-  /// Handles the sign-up process
-  /// 
-  /// This method:
-  /// 1. Validates the form data
-  /// 2. Shows loading state
-  /// 3. Calls backend API to generate DID
-  /// 4. Displays success dialog with DID
-  /// 5. Navigates to dashboard on completion
-  /// 
-  /// Throws exceptions for network errors or API failures
-  void _signUp() async {
-    if (_formKey.currentState!.validate()) {
-      setState(() => _isLoading = true);
-      
-      try {
-        // Create DID by calling the backend API
-        final response = await http.post(
-          Uri.parse('http://127.0.0.1:8000/did/create'),
-          headers: {'Content-Type': 'application/json'},
+  void _pickFile() async {
+    FilePickerResult? result = await FilePicker.platform.pickFiles();
+    if (result != null && result.files.single.name.isNotEmpty) {
+      setState(() {
+        _selectedFileName = result.files.single.name;
+        _selectedFile = result.files.single;
+      });
+    }
+  }
+
+  void _nextStep() {
+    if (_currentStep == 0) {
+      if (_selectedFile != null) {
+        setState(() => _currentStep++);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Please upload your IC photo.')),
         );
-        
-        if (response.statusCode == 200) {
-          final data = jsonDecode(response.body);
-          final did = data['did'];
-          
-          setState(() => _isLoading = false);
-          
-          // Show DID to user in pop-up dialog
-          _showDidDialog(did);
-        } else {
-          setState(() => _isLoading = false);
-          _showErrorSnackBar('Failed to create account. Please try again.');
-        }
-      } catch (e) {
-        setState(() => _isLoading = false);
-        _showErrorSnackBar('Connection error: $e');
+      }
+    } else if (_currentStep == 1) {
+      if (_personalFormKey.currentState!.validate()) {
+        setState(() => _currentStep++);
+      }
+    } else if (_currentStep == 2) {
+      if (_identityFormKey.currentState!.validate()) {
+        _submit();
       }
     }
   }
 
-  /// Displays the DID generation success dialog
-  /// 
-  /// Shows a dialog with the generated DID and instructions for the user
-  /// 
-  /// [did] - The generated Decentralized Identifier
+  void _prevStep() {
+    if (_currentStep > 0) setState(() => _currentStep--);
+  }
+
+  void _submit() async {
+    // Collect all data and (optionally) send to backend
+    final registrationData = {
+      'ic_photo': _selectedFileName,
+      'personal': {
+        'name': _nameController.text,
+        'email': _emailController.text + '@gmail.com',
+        'phone': _phoneController.text,
+        'nric': _nricController.text,
+        'nationality': _nationalityValue,
+      },
+      'identity': {
+        'address': _addressController.text,
+        'salary_range': _salaryRangeValue,
+        'occupation': _occupationController.text,
+      },
+    };
+    // Show animated verification dialog
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => VerificationProgressDialog(
+        onComplete: () async {
+          Navigator.of(context).pop(); // Close progress dialog
+          // Call backend to create DID
+          String did = '';
+          try {
+            did = await ApiService().createDid();
+          } catch (e) {
+            did = 'Error: Could not generate DID';
+          }
+          _showDidDialog(did); // Show DID dialog (real DID)
+        },
+      ),
+    );
+  }
+
   void _showDidDialog(String did) {
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: Text('DID Generated', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Your DID:', style: TextStyle(fontWeight: FontWeight.bold)),
-              SizedBox(height: 8),
-              Container(
-                padding: EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade100,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.grey.shade300),
-                ),
-                child: SelectableText(
-                  did,
-                  style: TextStyle(fontFamily: 'monospace', fontSize: 12),
-                ),
+      builder: (context) => Center(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxWidth: 290), // Match verification dialog width
+          child: Material(
+            type: MaterialType.transparency,
+            child: Container(
+              padding: EdgeInsets.all(18),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
               ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.of(context).pop(); // Close dialog
-                // Show success screen
-                Navigator.of(context).pushReplacement(
-                  MaterialPageRoute(
-                    builder: (_) => AccountSuccessScreen(did: did),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.verified, color: Colors.purple, size: 40),
+                  SizedBox(height: 10),
+                  Text('DID Generated', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17)),
+                  SizedBox(height: 8),
+                  Text('Your DID:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                  SizedBox(height: 4),
+                  Container(
+                    padding: EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade100,
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: Colors.grey.shade300),
+                    ),
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: SelectableText(
+                        did,
+                        style: TextStyle(fontFamily: 'monospace', fontSize: 12),
+                      ),
+                    ),
                   ),
-                );
-              },
-              child: Text('Continue', style: TextStyle(color: Colors.purple, fontWeight: FontWeight.bold)),
+                  SizedBox(height: 14),
+                  TextButton(
+                    onPressed: () {
+                      Navigator.of(context).pop(); // Close dialog
+                      Navigator.of(_rootContext).pushNamedAndRemoveUntil('/dashboard', (route) => false);
+                    },
+                    child: Text('Continue', style: TextStyle(color: Colors.purple, fontWeight: FontWeight.bold)),
+                  ),
+                ],
+              ),
             ),
-          ],
-        );
-      },
-    );
-  }
-
-  /// Shows error message in a SnackBar
-  /// 
-  /// [message] - The error message to display
-  void _showErrorSnackBar(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
+          ),
+        ),
+      ),
     );
   }
 
   @override
+  Widget build(BuildContext context) {
+    _rootContext = context;
+    return Scaffold(
+      appBar: AppBar(
+        title: Text('Voter Registration'),
+        backgroundColor: Colors.purple,
+        foregroundColor: Colors.white,
+      ),
+      body: Stepper(
+        type: StepperType.horizontal,
+        currentStep: _currentStep,
+        onStepContinue: _nextStep,
+        onStepCancel: _prevStep,
+        controlsBuilder: (context, details) {
+          // Step 0: Only Next, centered
+          if (_currentStep == 0) return SizedBox.shrink();
+          // Step 1: Previous and Next, centered
+          if (_currentStep == 1) {
+            return Column(
+              children: [
+                SizedBox(height: 32), // Add extra space above the buttons
+                Center(
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      SizedBox(
+                        width: 170,
+                        height: 44,
+                        child: ElevatedButton(
+                          onPressed: _prevStep,
+                          child: Text('Previous', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.purple,
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                            elevation: 6,
+                          ),
+                        ),
+                      ),
+                      SizedBox(width: 24),
+                      SizedBox(
+                        width: 170,
+                        height: 44,
+                        child: ElevatedButton(
+                          onPressed: _nextStep,
+                          child: Text('Next', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.purple,
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                            elevation: 6,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            );
+          }
+          // Step 2: Previous and Submit, centered
+          if (_currentStep == 2) {
+            return Column(
+              children: [
+                SizedBox(height: 32),
+                Center(
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      SizedBox(
+                        width: 170,
+                        height: 44,
+                        child: ElevatedButton(
+                          onPressed: _prevStep,
+                          child: Text('Previous', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.purple,
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                            elevation: 6,
+                          ),
+                        ),
+                      ),
+                      SizedBox(width: 24),
+                      SizedBox(
+                        width: 170,
+                        height: 44,
+                        child: ElevatedButton(
+                          onPressed: _nextStep,
+                          child: Text('Submit', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.purple,
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                            elevation: 6,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            );
+          }
+          return SizedBox.shrink();
+        },
+        steps: [
+          Step(
+            title: Text('IC Photo', style: TextStyle(fontSize: 12)),
+            isActive: _currentStep >= 0,
+            state: _currentStep > 0 ? StepState.complete : StepState.indexed,
+            content: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Card(
+                  elevation: 2,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  child: Container(
+                    constraints: BoxConstraints(minHeight: 220), // Make card longer
+                    padding: EdgeInsets.symmetric(horizontal: 18.0, vertical: 32.0), // More vertical padding
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(Icons.credit_card, size: 36, color: Colors.purple),
+                            SizedBox(width: 12),
+                            Text('Upload your government-issued ID', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                          ],
+                        ),
+                        SizedBox(height: 8),
+                        Text('Passport, Driver’s License, etc.', style: TextStyle(color: Colors.grey[700])),
+                        SizedBox(height: 12),
+                        Row(
+                          children: [
+                            OutlinedButton(
+                              onPressed: () async {
+                                FilePickerResult? result = await FilePicker.platform.pickFiles();
+                                if (result != null && result.files.single.name.isNotEmpty) {
+                                  setState(() {
+                                    _selectedFileName = result.files.single.name;
+                                    _selectedFile = result.files.single;
+                                  });
+                                  // Simulate auto-upload
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(content: Text('File "${result.files.single.name}" uploaded!'), duration: Duration(seconds: 1)),
+                                  );
+                                }
+                              },
+                              child: Text('Choose File'),
+                            ),
+                            SizedBox(width: 12),
+                            if (_selectedFileName != null)
+                              Row(
+                                children: [
+                                  Icon(Icons.check_circle, color: Colors.green, size: 20),
+                                  SizedBox(width: 4),
+                                  Text(_selectedFileName!, style: TextStyle(fontSize: 13, color: Colors.teal)),
+                                ],
+                              )
+                            else
+                              Text('No file selected', style: TextStyle(color: Colors.grey)),
+                          ],
+                        ),
+                        SizedBox(height: 10),
+                        Container(
+                          padding: EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: Colors.purple.withOpacity(0.07),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(Icons.info_outline, color: Colors.purple, size: 18),
+                              SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  'Why do we need this?\nYour ID is required to verify your eligibility and prevent fraud. All documents are securely processed.',
+                                  style: TextStyle(fontSize: 12, color: Colors.purple[900]),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                SizedBox(height: 18),
+                Center(
+                  child: Text(
+                    'Need help? Contact support@organization.org',
+                    style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+                  ),
+                ),
+                SizedBox(height: 18),
+                Center(
+                  child: SizedBox(
+                    width: 260, // Increase width
+                    height: 44, // Decrease height
+                    child: ElevatedButton(
+                      onPressed: (_selectedFile == null) ? null : _nextStep,
+                      child: Text('Next', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.purple,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        elevation: 6,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          // Step 2: Personal Info
+          Step(
+            title: Text('Personal Info', style: TextStyle(fontSize: 12)),
+            isActive: _currentStep >= 1,
+            state: _currentStep > 1 ? StepState.complete : StepState.indexed,
+            content: Card(
+              elevation: 2,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              child: Container(
+                constraints: BoxConstraints(minHeight: 320),
+                padding: EdgeInsets.symmetric(horizontal: 18.0, vertical: 32.0),
+                child: Form(
+                  key: _personalFormKey,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(Icons.person, color: Colors.purple, size: 28),
+                          SizedBox(width: 10),
+                          Text('Personal Information', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+                        ],
+                      ),
+                      SizedBox(height: 10),
+                      Text('Please provide your personal details.', style: TextStyle(color: Colors.grey[700], fontSize: 13)),
+                      SizedBox(height: 18),
+                      TextFormField(
+                        controller: _nameController,
+                        decoration: InputDecoration(
+                          labelText: 'Full Name',
+                          prefixIcon: Icon(Icons.person_outline),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                        ),
+                        validator: (v) => v == null || v.isEmpty ? 'Enter your name' : null,
+                      ),
+                      SizedBox(height: 20),
+                      TextFormField(
+                        controller: _emailController,
+                        decoration: InputDecoration(
+                          labelText: 'Email',
+                          prefixIcon: Icon(Icons.email_outlined),
+                          suffixText: '@email.com',
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                        ),
+                        keyboardType: TextInputType.text,
+                        validator: (v) {
+                          if (v == null || v.isEmpty) return 'Enter your email username';
+                          // Optionally, add more username validation here
+                          return null;
+                        },
+                      ),
+                      SizedBox(height: 20),
+                      TextFormField(
+                        controller: _phoneController,
+                        decoration: InputDecoration(
+                          labelText: 'Phone Number',
+                          prefixIcon: Icon(Icons.phone_outlined),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                        ),
+                        keyboardType: TextInputType.phone,
+                        validator: (v) => v == null || v.isEmpty ? 'Enter your phone number' : null,
+                      ),
+                      SizedBox(height: 20),
+                      TextFormField(
+                        controller: _nricController,
+                        decoration: InputDecoration(
+                          labelText: 'NRIC Number',
+                          prefixIcon: Icon(Icons.credit_card, color: Colors.black), // Black icon
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                        ),
+                        validator: (v) => v == null || v.isEmpty ? 'Enter your NRIC number' : null,
+                      ),
+                      SizedBox(height: 20),
+                      DropdownButtonFormField<String>(
+                        value: _nationalityValue,
+                        items: [
+                          DropdownMenuItem(value: 'Yes', child: Text('Yes')),
+                          DropdownMenuItem(value: 'No', child: Text('No')),
+                        ],
+                        onChanged: (val) => setState(() => _nationalityValue = val),
+                        decoration: InputDecoration(
+                          labelText: 'Are you a national citizen?',
+                          prefixIcon: Icon(Icons.flag, color: Colors.black), // Black icon
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                        ),
+                        validator: (v) => v == null ? 'Select Yes or No' : null,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+          // Step 3: Identity Info
+          Step(
+            title: Text('Identity Info', style: TextStyle(fontSize: 12)),
+            isActive: _currentStep >= 2,
+            state: StepState.indexed,
+            content: Card(
+              elevation: 2,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              child: Padding(
+                padding: const EdgeInsets.all(18.0),
+                child: Form(
+                  key: _identityFormKey,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(Icons.badge, color: Colors.purple, size: 28),
+                          SizedBox(width: 10),
+                          Text('Identity Information', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                        ],
+                      ),
+                      SizedBox(height: 10),
+                      Text('Provide additional identity details.', style: TextStyle(color: Colors.grey[700], fontSize: 13)),
+                      SizedBox(height: 18),
+                      TextFormField(
+                        controller: _addressController,
+                        decoration: InputDecoration(
+                          labelText: 'Address',
+                          prefixIcon: Icon(Icons.home_outlined),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                        ),
+                        validator: (v) => v == null || v.isEmpty ? 'Enter your address' : null,
+                      ),
+                      SizedBox(height: 20),
+                      DropdownButtonFormField<String>(
+                        value: _salaryRangeValue,
+                        items: [
+                          DropdownMenuItem(value: '<4000', child: Text('< 4,000')),
+                          DropdownMenuItem(value: '4000-8000', child: Text('4,000–8,000')),
+                          DropdownMenuItem(value: '>8000', child: Text('> 8,000')),
+                        ],
+                        onChanged: (val) => setState(() => _salaryRangeValue = val),
+                        decoration: InputDecoration(
+                          labelText: 'Salary Range',
+                          prefixIcon: Icon(Icons.attach_money, color: Colors.black),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                        ),
+                        validator: (v) => v == null ? 'Select salary range' : null,
+                      ),
+                      SizedBox(height: 20),
+                      TextFormField(
+                        controller: _occupationController,
+                        decoration: InputDecoration(
+                          labelText: 'Occupation',
+                          prefixIcon: Icon(Icons.work_outline),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                        ),
+                        validator: (v) => v == null || v.isEmpty ? 'Enter your occupation' : null,
+                      ),
+                      SizedBox(height: 20),
+                      Container(
+                        padding: EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.teal.withOpacity(0.04),
+                          border: Border(left: BorderSide(color: Colors.purple, width: 3)),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Verification Process', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.purple)),
+                            SizedBox(height: 6),
+                            Text('Your documents will be verified by a consortium of trusted authorities:'),
+                            SizedBox(height: 6),
+                            ...[
+                              'Government Identity Authority',
+                              'Electoral Commission',
+                              'District Administration',
+                              'Citizen Registry',
+                              'Election Security Authority',
+                            ].map((e) => Padding(
+                              padding: const EdgeInsets.only(left: 8, bottom: 2),
+                              child: Text('• $e', style: TextStyle(fontSize: 13)),
+                            )),
+                            SizedBox(height: 6),
+                            Text('Each authority will verify your identity using secure Hardware Security Modules (HSM) and collectively sign your credential.'),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class VerificationProgressDialog extends StatefulWidget {
+  final VoidCallback onComplete;
+  const VerificationProgressDialog({required this.onComplete});
+  @override
+  State<VerificationProgressDialog> createState() => _VerificationProgressDialogState();
+}
+
+class _VerificationProgressDialogState extends State<VerificationProgressDialog> {
+  int _step = 0;
+  late Timer _timer;
+
+  final List<_VerificationStep> _steps = [
+    _VerificationStep('Documents Received', 'Your documents have been securely uploaded'),
+    _VerificationStep('Government Verification', 'Identity validated with government records'),
+    _VerificationStep('Consortium Approval', '5 of 5 signatures received from consortium members'),
+    _VerificationStep('Credential Issuance', 'Creating and signing your verifiable credential'),
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _timer = Timer.periodic(Duration(seconds: 1), (timer) {
+      if (_step < _steps.length - 1) {
+        setState(() => _step++);
+      } else if (_step == _steps.length - 1) {
+        // Wait a bit longer for the last step
+        Future.delayed(Duration(seconds: 2), () {
+          widget.onComplete();
+        });
+        _timer.cancel();
+      }
+    });
+  }
+
+  @override
   void dispose() {
-    // Clean up text controllers to prevent memory leaks
-    nameController.dispose();
-    emailController.dispose();
-    phoneController.dispose();
-    addressController.dispose();
-    passwordController.dispose();
-    confirmPasswordController.dispose();
+    _timer.cancel();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: Text('Sign Up')),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24.0),
-        child: Form(
-          key: _formKey,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // Header icon and title
-              Icon(Icons.person_add, size: 60, color: Colors.teal),
-              SizedBox(height: 24),
-              Text('Create a new account',
-                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.teal.shade800),
-                  textAlign: TextAlign.center),
-              SizedBox(height: 32),
-              
-              // Full Name input field
-              _buildTextField(
-                controller: nameController,
-                label: 'Full Name',
-                icon: Icons.person,
-                validator: (value) => value == null || value.isEmpty ? 'Enter your name' : null,
-              ),
-              
-              // Email input field
-              _buildTextField(
-                controller: emailController,
-                label: 'Email',
-                icon: Icons.email,
-                keyboardType: TextInputType.emailAddress,
-                validator: (value) {
-                  if (value == null || value.isEmpty) return 'Enter your email';
-                  if (!RegExp(r'^[^@]+@[^@]+\.[^@]+').hasMatch(value)) return 'Enter a valid email';
-                  return null;
-                },
-              ),
-              
-              // Phone Number input field
-              _buildTextField(
-                controller: phoneController,
-                label: 'Phone Number',
-                icon: Icons.phone,
-                keyboardType: TextInputType.phone,
-                validator: (value) => value == null || value.isEmpty ? 'Enter your phone number' : null,
-              ),
-              
-              // Address input field
-              _buildTextField(
-                controller: addressController,
-                label: 'Address',
-                icon: Icons.home,
-                validator: (value) => value == null || value.isEmpty ? 'Enter your address' : null,
-              ),
-              
-              // Password input field
-              _buildPasswordField(
-                controller: passwordController,
-                label: 'Password',
-                obscureText: _obscurePassword,
-                onToggleVisibility: () => setState(() => _obscurePassword = !_obscurePassword),
-                validator: (value) => value == null || value.length < 6 ? 'Password must be at least 6 characters' : null,
-              ),
-              
-              // Confirm Password input field
-              _buildPasswordField(
-                controller: confirmPasswordController,
-                label: 'Confirm Password',
-                obscureText: _obscureConfirmPassword,
-                onToggleVisibility: () => setState(() => _obscureConfirmPassword = !_obscureConfirmPassword),
-                validator: (value) {
-                  if (value == null || value.isEmpty) return 'Confirm your password';
-                  if (value != passwordController.text) return 'Passwords do not match';
-                  return null;
-                },
-              ),
-              
-              SizedBox(height: 32),
-              
-              // Sign Up button
-              ElevatedButton(
-                onPressed: _isLoading ? null : _signUp,
-                child: _isLoading
-                    ? SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, valueColor: AlwaysStoppedAnimation<Color>(Colors.white)))
-                    : Text('Sign Up', style: TextStyle(fontSize: 18)),
-                style: ElevatedButton.styleFrom(padding: EdgeInsets.symmetric(vertical: 16)),
-              ),
-            ],
+    return Center(
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxWidth: 290), // Slightly wider, but still compact
+        child: Material(
+          type: MaterialType.transparency,
+          child: Container(
+            padding: EdgeInsets.symmetric(horizontal: 16, vertical: 18), // Slightly more horizontal padding
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Flexible(
+                      child: Text('Identity Verification in Progress', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+                    ),
+                    IconButton(
+                      icon: Icon(Icons.close),
+                      onPressed: () => Navigator.of(context).pop(),
+                    ),
+                  ],
+                ),
+                SizedBox(height: 10),
+                Text('Your identity documents are being verified by the consortium members.', softWrap: true),
+                SizedBox(height: 18),
+                ...List.generate(_steps.length, (i) {
+                  final isDone = i < _step;
+                  final isCurrent = i == _step;
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 12.0),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Column(
+                          children: [
+                            if (isDone)
+                              Icon(Icons.check_circle, color: Colors.purple, size: 26)
+                            else if (isCurrent)
+                              SizedBox(
+                                width: 26,
+                                height: 26,
+                                child: CircularProgressIndicator(strokeWidth: 3, color: Colors.purple),
+                              )
+                            else
+                              Icon(Icons.radio_button_unchecked, color: Colors.purple[200], size: 26),
+                          ],
+                        ),
+                        SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                _steps[i].title,
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.purple,
+                                  fontSize: 15,
+                                ),
+                                softWrap: true,
+                              ),
+                              SizedBox(height: 2),
+                              Text(
+                                _steps[i].subtitle,
+                                style: TextStyle(fontSize: 13, color: Colors.grey[700]),
+                                softWrap: true,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }),
+                SizedBox(height: 10),
+                Text(
+                  'This process typically takes 1–2 minutes in this demo. In a real system, it might take longer.',
+                  style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                  softWrap: true,
+                ),
+                SizedBox(height: 10),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: Text('Close', style: TextStyle(color: Colors.purple, fontWeight: FontWeight.bold)),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
-    );
-  }
-
-  /// Builds a standard text input field with validation
-  /// 
-  /// [controller] - Text editing controller
-  /// [label] - Field label text
-  /// [icon] - Prefix icon
-  /// [keyboardType] - Keyboard type for input
-  /// [validator] - Form validation function
-  Widget _buildTextField({
-    required TextEditingController controller,
-    required String label,
-    required IconData icon,
-    TextInputType? keyboardType,
-    String? Function(String?)? validator,
-  }) {
-    return Column(
-      children: [
-        TextFormField(
-          controller: controller,
-          decoration: InputDecoration(
-            labelText: label,
-            border: OutlineInputBorder(),
-            prefixIcon: Icon(icon, color: Colors.purple),
-          ),
-          keyboardType: keyboardType,
-          validator: validator,
-        ),
-        SizedBox(height: 20),
-      ],
-    );
-  }
-
-  /// Builds a password input field with visibility toggle
-  /// 
-  /// [controller] - Text editing controller
-  /// [label] - Field label text
-  /// [obscureText] - Whether to obscure the text
-  /// [onToggleVisibility] - Callback for visibility toggle
-  /// [validator] - Form validation function
-  Widget _buildPasswordField({
-    required TextEditingController controller,
-    required String label,
-    required bool obscureText,
-    required VoidCallback onToggleVisibility,
-    String? Function(String?)? validator,
-  }) {
-    return Column(
-      children: [
-        TextFormField(
-          controller: controller,
-          decoration: InputDecoration(
-            labelText: label,
-            border: OutlineInputBorder(),
-            prefixIcon: Icon(Icons.lock, color: Colors.purple),
-            suffixIcon: IconButton(
-              icon: Icon(obscureText ? Icons.visibility : Icons.visibility_off, color: Colors.purple),
-              onPressed: onToggleVisibility,
-            ),
-          ),
-          obscureText: obscureText,
-          validator: validator,
-        ),
-        SizedBox(height: 20),
-      ],
     );
   }
 }
 
-/// Account Success Screen - Displays registration success and DID
-/// 
-/// This screen is shown after successful registration and DID generation.
-/// It displays the generated DID in a user-friendly format and provides
-/// navigation to the dashboard.
-/// 
-/// Features:
-/// - Compact, mobile-optimized design
-/// - DID display with copy functionality
-/// - Navigation to dashboard
-/// - Success confirmation
-class AccountSuccessScreen extends StatelessWidget {
-  /// The generated Decentralized Identifier
-  final String did;
-
-  const AccountSuccessScreen({required this.did});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text('Congratulations'),
-        backgroundColor: Colors.purple,
-        foregroundColor: Colors.white,
-      ),
-      body: Center(
-        child: Container(
-          constraints: BoxConstraints(
-            maxWidth: 280,
-            maxHeight: 350,
-          ),
-          padding: const EdgeInsets.all(20.0),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              // Success icon
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: Colors.teal,
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(
-                  Icons.check,
-                  color: Colors.white,
-                  size: 20,
-                ),
-              ),
-              SizedBox(height: 8),
-              
-              // Success message
-              Text(
-                'Account Created Successfully!',
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.black87,
-                ),
-                textAlign: TextAlign.center,
-              ),
-              SizedBox(height: 8),
-              
-              // DID display
-              Text(
-                'Your DID:',
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w500,
-                  color: Colors.black87,
-                ),
-              ),
-              SizedBox(height: 3),
-              Container(
-                width: double.infinity,
-                padding: EdgeInsets.all(6),
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade50,
-                  borderRadius: BorderRadius.circular(3),
-                  border: Border.all(color: Colors.grey.shade300),
-                ),
-                child: SelectableText(
-                  did,
-                  style: TextStyle(
-                    fontFamily: 'monospace',
-                    fontSize: 7,
-                    color: Colors.teal.shade700,
-                  ),
-                ),
-              ),
-              SizedBox(height: 12),
-              
-              // Continue button
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: () {
-                    // Navigate to the dashboard screen
-                    Navigator.of(context).pushReplacementNamed('/dashboard');
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.purple,
-                    padding: EdgeInsets.symmetric(vertical: 8),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    elevation: 1,
-                  ),
-                  child: Text(
-                    'Continue',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
+class _VerificationStep {
+  final String title;
+  final String subtitle;
+  _VerificationStep(this.title, this.subtitle);
 } 

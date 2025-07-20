@@ -24,7 +24,9 @@ use axum::{
     Router, 
     Json, 
     response::IntoResponse, 
-    http::StatusCode
+    http::StatusCode,
+    extract::Query,
+    extract::Json as AxumJson,
 };
 use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
@@ -38,6 +40,29 @@ use bs58;
 use identity_iota::iota::{IotaDocument, IotaDID, NetworkName};
 use identity_iota::verification::{MethodBuilder, MethodData, MethodType, MethodScope};
 use identity_iota::did::DID;
+
+// --- IOTA ISC Smart Contract Integration ---
+use std::process::Command;
+
+// TODO: Set these to your actual ISC chain and contract details
+const NODE_URL: &str = "https://api.testnet.shimmer.network";
+const CHAIN_ID: &str = "your_chain_id_here";
+const CONTRACT_NAME: &str = "iota_voting_contract";
+
+#[derive(Deserialize)]
+struct VoteRequest {
+    user_id: String,
+    vote: String,
+    candidate: String,
+    did: String,
+}
+
+#[derive(Serialize, Deserialize)]
+struct PolicyVoteRequest {
+    user_id: String,
+    policy: String,
+    vote: String,
+}
 
 /// Response structure for DID creation
 /// 
@@ -74,30 +99,6 @@ struct FeedbackRequest {
     feedback: String,
 }
 
-/// Request structure for election voting
-/// 
-/// Contains the voting data for election participation.
-#[derive(Serialize, Deserialize)]
-struct VoteRequest {
-    /// User's unique identifier
-    user_id: String,
-    /// Selected party or candidate
-    vote: String,
-}
-
-/// Request structure for policy voting
-/// 
-/// Contains the voting data for policy decisions.
-#[derive(Serialize, Deserialize)]
-struct PolicyVoteRequest {
-    /// User's unique identifier
-    user_id: String,
-    /// Policy being voted on
-    policy: String,
-    /// Vote choice (yes/no)
-    vote: String,
-}
-
 /// Response structure for vote submission
 /// 
 /// Contains the confirmation data and notarization receipt for votes.
@@ -122,6 +123,29 @@ struct PolicyVoteResponse {
     notarization_receipt: String,
     /// Success message
     message: String,
+}
+
+#[derive(Deserialize)]
+struct DidQuery {
+    did: String,
+}
+
+#[derive(Deserialize)]
+struct CandidateQuery {
+    candidate: String,
+}
+
+// Helper to call Wasp CLI and return output as String
+fn call_wasp_cli(args: &[&str]) -> Result<String, String> {
+    let output = Command::new("wasp-cli")
+        .args(args)
+        .output()
+        .map_err(|e| format!("Failed to run wasp-cli: {}", e))?;
+    if output.status.success() {
+        Ok(String::from_utf8_lossy(&output.stdout).to_string())
+    } else {
+        Err(String::from_utf8_lossy(&output.stderr).to_string())
+    }
 }
 
 /// Creates a new Decentralized Identifier (DID) using IOTA Identity
@@ -291,6 +315,76 @@ async fn submit_policy_vote(Json(req): Json<PolicyVoteRequest>) -> Json<PolicyVo
     })
 }
 
+// POST /vote
+async fn isc_vote(AxumJson(payload): AxumJson<VoteRequest>) -> AxumJson<String> {
+    let args = [
+        "chain", "post-request", "iota_voting_contract", "vote",
+        &format!("candidate={}", payload.candidate),
+        &format!("did={}", payload.did),
+    ];
+    match call_wasp_cli(&args) {
+        Ok(res) => AxumJson(format!("Vote submitted: {}", res)),
+        Err(e) => AxumJson(format!("Error: {}", e)),
+    }
+}
+
+// GET /votes?candidate=NAME
+async fn isc_get_votes(Query(query): Query<CandidateQuery>) -> AxumJson<u64> {
+    let args = [
+        "chain", "call-view", "iota_voting_contract", "get_votes",
+        &format!("candidate={}", query.candidate),
+    ];
+    match call_wasp_cli(&args) {
+        Ok(res) => {
+            let votes = res.lines()
+                .find(|line| line.contains("votes:"))
+                .and_then(|line| line.split(':').nth(1))
+                .and_then(|v| v.trim().parse::<u64>().ok())
+                .unwrap_or(0);
+            AxumJson(votes)
+        }
+        Err(_) => AxumJson(0),
+    }
+}
+
+// GET /has_voted?did=ID
+async fn isc_has_voted(Query(query): Query<DidQuery>) -> AxumJson<bool> {
+    let args = [
+        "chain", "call-view", "iota_voting_contract", "has_voted",
+        &format!("did={}", query.did),
+    ];
+    match call_wasp_cli(&args) {
+        Ok(res) => {
+            let voted = res.lines()
+                .find(|line| line.contains("has_voted:"))
+                .and_then(|line| line.split(':').nth(1))
+                .map(|v| v.trim() == "true")
+                .unwrap_or(false);
+            AxumJson(voted)
+        }
+        Err(_) => AxumJson(false),
+    }
+}
+
+// GET /rewards?did=ID
+async fn isc_get_rewards(Query(query): Query<DidQuery>) -> AxumJson<u64> {
+    let args = [
+        "chain", "call-view", "iota_voting_contract", "get_rewards",
+        &format!("did={}", query.did),
+    ];
+    match call_wasp_cli(&args) {
+        Ok(res) => {
+            let rewards = res.lines()
+                .find(|line| line.contains("rewards:"))
+                .and_then(|line| line.split(':').nth(1))
+                .and_then(|v| v.trim().parse::<u64>().ok())
+                .unwrap_or(0);
+            AxumJson(rewards)
+        }
+        Err(_) => AxumJson(0),
+    }
+}
+
 /// Main function that starts the Axum web server
 /// 
 /// This function:
@@ -317,6 +411,9 @@ async fn main() {
         .route("/did/create", get(get_create_did))
         .route("/credential/issue", post(issue_credential))
         .route("/feedback/submit", post(submit_feedback))
+        .route("/votes", get(isc_get_votes))
+        .route("/has_voted", get(isc_has_voted))
+        .route("/rewards", get(isc_get_rewards))
         .layer(cors);
 
     // Configure server address and port

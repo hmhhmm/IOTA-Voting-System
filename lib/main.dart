@@ -1,3 +1,4 @@
+
 /// 🗳️ IOTA Voting Platform - Main Application Entry Point
 /// 
 /// This file serves as the main entry point for the Flutter application.
@@ -116,13 +117,13 @@ class VirtualPhoneApp extends StatelessWidget {
   /// - '/' -> SignInScreen (authentication)
   /// - '/dashboard' -> DashboardScreen (main app)
   /// - '/feedback' -> FeedbackScreen (policy feedback)
-  /// - '/signup' -> SignUpScreen (user registration)
+  /// - '/signup' -> RegisterPage (user registration)
   Map<String, WidgetBuilder> _buildRouteMap() {
     return {
       '/': (context) => SignInScreen(),
       '/dashboard': (context) => DashboardScreen(),
       '/feedback': (context) => FeedbackScreen(),
-      '/signup': (context) => SignUpScreen(),
+      '/signup': (context) => RegisterPage(),
     };
   }
 } 

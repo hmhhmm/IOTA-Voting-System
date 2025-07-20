@@ -4,6 +4,7 @@ import 'dart:convert'; // Added for jsonDecode
 import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:fl_chart/fl_chart.dart';
+import '../api_service.dart';
 
 String getBackendBaseUrl() {
   return 'http://127.0.0.1:3000';
@@ -1391,55 +1392,63 @@ class VotePolicyListPage extends StatelessWidget {
                                 context: context,
                                 builder: (context) => Center(
                                   child: ConstrainedBox(
-                                    constraints: BoxConstraints(maxWidth: 220), // Make dialog box smaller
+                                    constraints: BoxConstraints(maxWidth: 340), // Increase dialog width
                                     child: AlertDialog(
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)), // Only one shape argument
                                       title: Center(
                                         child: Text(
                                           'Cast Your Vote',
-                                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                                          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
                                           textAlign: TextAlign.center,
                                         ),
                                       ),
                                       content: Padding(
-                                        padding: const EdgeInsets.symmetric(vertical: 8.0),
+                                        padding: const EdgeInsets.symmetric(vertical: 16.0, horizontal: 8.0), // More padding
                                         child: Text(
                                           'Do you support this policy?',
-                                          style: TextStyle(fontSize: 15),
+                                          style: TextStyle(fontSize: 16),
                                           textAlign: TextAlign.center,
                                         ),
                                       ),
-                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                                      contentPadding: EdgeInsets.fromLTRB(18, 12, 18, 0),
-                                      actionsPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                                      contentPadding: EdgeInsets.fromLTRB(24, 18, 24, 0),
+                                      actionsPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 16),
                                       actionsAlignment: MainAxisAlignment.center,
-                                      insetPadding: EdgeInsets.symmetric(horizontal: 24, vertical: 24),
                                       actions: [
-                                        ConstrainedBox(
-                                          constraints: BoxConstraints(maxWidth: 120),
-                                          child: ElevatedButton(
-                                            style: ElevatedButton.styleFrom(
-                                              backgroundColor: Theme.of(context).primaryColor,
-                                              foregroundColor: Colors.white,
-                                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                              padding: EdgeInsets.symmetric(vertical: 10),
+                                        Row(
+                                          mainAxisAlignment: MainAxisAlignment.center,
+                                          children: [
+                                            SizedBox(
+                                              width: 90,
+                                              height: 44,
+                                              child: ElevatedButton(
+                                                style: ElevatedButton.styleFrom(
+                                                  backgroundColor: Theme.of(context).primaryColor,
+                                                  foregroundColor: Colors.white,
+                                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                                  padding: EdgeInsets.symmetric(vertical: 10),
+                                                  elevation: 2,
+                                                ),
+                                                onPressed: () => Navigator.of(context).pop('no'),
+                                                child: Text('No', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                                              ),
                                             ),
-                                            onPressed: () => Navigator.of(context).pop('no'),
-                                            child: Text('No', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
-                                          ),
-                                        ),
-                                        SizedBox(width: 10),
-                                        ConstrainedBox(
-                                          constraints: BoxConstraints(maxWidth: 120),
-                                          child: ElevatedButton(
-                                            style: ElevatedButton.styleFrom(
-                                              backgroundColor: Theme.of(context).primaryColor,
-                                              foregroundColor: Colors.white,
-                                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                              padding: EdgeInsets.symmetric(vertical: 10),
+                                            SizedBox(width: 24),
+                                            SizedBox(
+                                              width: 90,
+                                              height: 44,
+                                              child: ElevatedButton(
+                                                style: ElevatedButton.styleFrom(
+                                                  backgroundColor: Theme.of(context).primaryColor,
+                                                  foregroundColor: Colors.white,
+                                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                                  padding: EdgeInsets.symmetric(vertical: 10),
+                                                  elevation: 2,
+                                                ),
+                                                onPressed: () => Navigator.of(context).pop('yes'),
+                                                child: Text('Yes', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                                              ),
                                             ),
-                                            onPressed: () => Navigator.of(context).pop('yes'),
-                                            child: Text('Yes', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
-                                          ),
+                                          ],
                                         ),
                                       ],
                                     ),
@@ -1447,7 +1456,24 @@ class VotePolicyListPage extends StatelessWidget {
                                 ),
                               );
                               if (selectedVote != null) {
-                                await submitPolicyVote(context, policy.title, selectedVote);
+                                final api = ApiService();
+                                final data = await api.submitPolicyVote('some_user', policy.title, selectedVote);
+                                final message = (data['message'] ?? '').toString().toLowerCase();
+                                if (data['success'] == true || message.contains('recorded successfully')) {
+                                  Navigator.of(context).pushReplacement(
+                                    MaterialPageRoute(
+                                      builder: (_) => NotarizationReceiptPage(
+                                        party: policy.title,
+                                        receipt: data['notarization_receipt'] ?? '',
+                                        message: data['message'] ?? 'Policy vote recorded.',
+                                      ),
+                                    ),
+                                  );
+                                } else {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(content: Text('Backend error: ${data['message']}')),
+                                  );
+                                }
                               }
                             }
                           : null,
@@ -1783,20 +1809,14 @@ class _PartyVotingPageState extends State<PartyVotingPage> {
                     : () async {
                         final scaffoldMessenger = ScaffoldMessenger.of(context);
                         try {
-                          final response = await http.post(
-                            Uri.parse(getBackendBaseUrl() + '/vote'),
-                            headers: {'Content-Type': 'application/json'},
-                            body: jsonEncode({
-                              'user_id': 'some_user', // Replace with actual user ID if available
-                              'vote': selectedParty!,
-                            }),
-                          );
-                          if (response.statusCode == 200) {
-                            final data = jsonDecode(response.body);
+                          final api = ApiService();
+                          final data = await api.submitVote('some_user', selectedParty!, selectedParty!, 'did:example');
+                          final message = (data['message'] ?? '').toString().toLowerCase();
+                          if (data['success'] == true || message.contains('recorded successfully')) {
                             Navigator.of(context).pushReplacement(
                               MaterialPageRoute(
                                 builder: (_) => NotarizationReceiptPage(
-                                  party: data['party'] ?? selectedParty!,
+                                  party: selectedParty!,
                                   receipt: data['notarization_receipt'] ?? '',
                                   message: data['message'] ?? 'Vote recorded.',
                                 ),
@@ -1804,12 +1824,12 @@ class _PartyVotingPageState extends State<PartyVotingPage> {
                             );
                           } else {
                             scaffoldMessenger.showSnackBar(
-                              SnackBar(content: Text('Backend error: \\${response.statusCode}')),
+                              SnackBar(content: Text('Backend error: ${data['message']}')),
                             );
                           }
                         } catch (e) {
                           scaffoldMessenger.showSnackBar(
-                            SnackBar(content: Text('Failed to connect to backend: \\${e}')),
+                            SnackBar(content: Text('Failed to connect to backend: $e')),
                           );
                         }
                       },
@@ -1848,12 +1868,12 @@ Future<void> submitPolicyVote(BuildContext context, String selectedPolicy, Strin
       );
     } else {
       scaffoldMessenger.showSnackBar(
-        SnackBar(content: Text('Backend error: \\${response.statusCode}')),
+        SnackBar(content: Text('Backend error: ${response.statusCode}')),
       );
     }
   } catch (e) {
     scaffoldMessenger.showSnackBar(
-      SnackBar(content: Text('Failed to connect to backend: \\${e}')),
+      SnackBar(content: Text('Failed to connect to backend: $e')),
     );
   }
 }

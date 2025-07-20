@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'dashboard_screen.dart' show getBackendBaseUrl;
+import '../api_service.dart';
 
 class FeedbackScreen extends StatefulWidget {
   @override
@@ -29,38 +30,49 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
       setState(() {
         _isSubmitting = true;
       });
-      await Future.delayed(Duration(seconds: 1));
-      setState(() {
-        _isSubmitting = false;
-      });
-      final snackBar = SnackBar(
-        content: Row(
-          children: [
-            Icon(Icons.check_circle, color: Colors.white),
-            SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                "Feedback submitted successfully!",
-                style: TextStyle(fontSize: 16),
+      try {
+        final api = ApiService();
+        // Replace with actual user DID if available
+        await api.submitFeedback('did:example', feedbackController.text);
+        setState(() {
+          _isSubmitting = false;
+        });
+        final snackBar = SnackBar(
+          content: Row(
+            children: [
+              Icon(Icons.check_circle, color: Colors.white),
+              SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  "Feedback submitted successfully!",
+                  style: TextStyle(fontSize: 16),
+                ),
               ),
-            ),
-          ],
-        ),
-        backgroundColor: Colors.purple,
-        duration: Duration(milliseconds: 1200),
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(8),
-        ),
-        margin: EdgeInsets.only(bottom: 40, left: 16, right: 16),
-      );
-      ScaffoldMessenger.of(context).showSnackBar(snackBar);
-      feedbackController.clear();
-      setState(() {
-        _selectedCategory = 'General Policy';
-      });
-      await Future.delayed(snackBar.duration);
-      if (mounted) Navigator.of(context).pop();
+            ],
+          ),
+          backgroundColor: Colors.purple,
+          duration: Duration(milliseconds: 1200),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(8),
+          ),
+          margin: EdgeInsets.only(bottom: 40, left: 16, right: 16),
+        );
+        ScaffoldMessenger.of(context).showSnackBar(snackBar);
+        feedbackController.clear();
+        setState(() {
+          _selectedCategory = 'General Policy';
+        });
+        await Future.delayed(snackBar.duration);
+        if (mounted) Navigator.of(context).pop();
+      } catch (e) {
+        setState(() {
+          _isSubmitting = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to submit feedback: $e')),
+        );
+      }
     }
   }
 
