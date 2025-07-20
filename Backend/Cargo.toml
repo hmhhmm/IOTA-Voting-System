@@ -1,0 +1,61 @@
+# 🗳️ IOTA Voting Platform - Backend Dependencies
+# 
+# This file defines the Rust project configuration and dependencies for the
+# IOTA Voting Platform backend server.
+# 
+# Project Information:
+# - Name: backend
+# - Version: 0.1.0
+# - Edition: 2021 (latest Rust edition)
+# 
+# Key Dependencies:
+# - axum: Modern web framework for building APIs
+# - tokio: Async runtime for handling concurrent requests
+# - serde: Serialization/deserialization for JSON handling
+# - identity_iota: IOTA Identity for DID management
+# - uuid: Unique identifier generation for receipts
+# - tower_http: HTTP middleware including CORS support
+
+[package]
+name = "backend"
+version = "0.1.0"
+edition = "2021"
+
+# Dependencies section - all required crates for the backend functionality
+[dependencies]
+
+# Base64 encoding/decoding for DID public keys
+bs58 = "0.5"
+
+# Modern web framework for building REST APIs
+axum = "0.7"
+
+# Async runtime for handling concurrent requests
+tokio = { version = "1.0", features = ["full"] }
+
+# Serialization/deserialization for JSON API responses
+serde = { version = "1.0", features = ["derive"] }
+
+# JSON handling for API requests and responses
+serde_json = "1.0"
+
+# HTTP middleware including CORS support for cross-origin requests
+tower-http = { version = "0.5", features = ["cors"] }
+
+# UUID generation for notarization receipts
+uuid = { version = "1", features = ["v4"] }
+
+# IOTA Identity for Decentralized Identifier (DID) management
+identity_iota = { version = "1.5.1"}
+
+# Cryptographic operations for DID generation
+crypto = "0.5"
+
+# Ed25519 digital signature algorithm for DID keypairs
+ed25519-dalek = { version = "2", features = ["rand_core"] }
+
+# Random number generation for cryptographic operations
+rand = "0.8"
+
+# Error handling utilities
+anyhow = "1.0" 
