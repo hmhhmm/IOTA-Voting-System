@@ -149,38 +149,38 @@ class _RegisterPageState extends State<RegisterPage> {
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
+            mainAxisSize: MainAxisSize.min,
+            children: [
                   Icon(Icons.verified, color: Colors.purple, size: 40),
                   SizedBox(height: 10),
                   Text('DID Generated', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17)),
-                  SizedBox(height: 8),
+              SizedBox(height: 8),
                   Text('Your DID:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                   SizedBox(height: 4),
-                  Container(
+              Container(
                     padding: EdgeInsets.all(6),
-                    decoration: BoxDecoration(
-                      color: Colors.grey.shade100,
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade100,
                       borderRadius: BorderRadius.circular(6),
-                      border: Border.all(color: Colors.grey.shade300),
-                    ),
+                  border: Border.all(color: Colors.grey.shade300),
+                ),
                     child: SingleChildScrollView(
                       scrollDirection: Axis.horizontal,
-                      child: SelectableText(
-                        did,
-                        style: TextStyle(fontFamily: 'monospace', fontSize: 12),
-                      ),
-                    ),
-                  ),
+                child: SelectableText(
+                  did,
+                  style: TextStyle(fontFamily: 'monospace', fontSize: 12),
+                ),
+              ),
+          ),
                   SizedBox(height: 14),
-                  TextButton(
-                    onPressed: () {
-                      Navigator.of(context).pop(); // Close dialog
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop(); // Close dialog
                       Navigator.of(_rootContext).pushNamedAndRemoveUntil('/dashboard', (route) => false);
-                    },
-                    child: Text('Continue', style: TextStyle(color: Colors.purple, fontWeight: FontWeight.bold)),
-                  ),
-                ],
+              },
+              child: Text('Continue', style: TextStyle(color: Colors.purple, fontWeight: FontWeight.bold)),
+            ),
+          ],
               ),
             ),
           ),
@@ -307,7 +307,7 @@ class _RegisterPageState extends State<RegisterPage> {
                 Card(
                   elevation: 2,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  child: Container(
+        child: Container(
                     constraints: BoxConstraints(minHeight: 220), // Make card longer
                     padding: EdgeInsets.symmetric(horizontal: 18.0, vertical: 32.0), // More vertical padding
                     child: Column(
@@ -344,7 +344,7 @@ class _RegisterPageState extends State<RegisterPage> {
                             SizedBox(width: 12),
                             if (_selectedFileName != null)
                               Row(
-                                children: [
+            children: [
                                   Icon(Icons.check_circle, color: Colors.green, size: 20),
                                   SizedBox(width: 4),
                                   Text(_selectedFileName!, style: TextStyle(fontSize: 13, color: Colors.teal)),
@@ -355,9 +355,9 @@ class _RegisterPageState extends State<RegisterPage> {
                           ],
                         ),
                         SizedBox(height: 10),
-                        Container(
+              Container(
                           padding: EdgeInsets.all(10),
-                          decoration: BoxDecoration(
+                decoration: BoxDecoration(
                             color: Colors.purple.withOpacity(0.07),
                             borderRadius: BorderRadius.circular(8),
                           ),
@@ -559,9 +559,9 @@ class _RegisterPageState extends State<RegisterPage> {
                         validator: (v) => v == null || v.isEmpty ? 'Enter your occupation' : null,
                       ),
                       SizedBox(height: 20),
-                      Container(
+              Container(
                         padding: EdgeInsets.all(12),
-                        decoration: BoxDecoration(
+                decoration: BoxDecoration(
                           color: Colors.teal.withOpacity(0.04),
                           border: Border(left: BorderSide(color: Colors.purple, width: 3)),
                           borderRadius: BorderRadius.circular(8),
@@ -701,8 +701,8 @@ class _VerificationProgressDialogState extends State<VerificationProgressDialog>
                             children: [
                               Text(
                                 _steps[i].title,
-                                style: TextStyle(
-                                  fontWeight: FontWeight.bold,
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
                                   color: Colors.purple,
                                   fontSize: 15,
                                 ),

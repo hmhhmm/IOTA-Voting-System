@@ -5,6 +5,10 @@ import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:fl_chart/fl_chart.dart';
 import '../api_service.dart';
+import 'dart:ui';
+import 'profile_screen.dart';
+import 'dart:async';
+import 'package:share_plus/share_plus.dart';
 
 String getBackendBaseUrl() {
   return 'http://127.0.0.1:3000';
@@ -25,86 +29,424 @@ Future<void> checkBackendHealth() async {
 
 // Election Voting Page
 class ElectionVotingPage extends StatelessWidget {
+  final List<String> regions = [
+    'Kuala Lumpur, Federal Territory',
+    'Selangor',
+    'Penang',
+    'Johor',
+    'Sabah',
+    'Sarawak',
+  ];
+  final DateTime votingClose = DateTime(2024, 7, 1, 23, 59, 59);
+
   @override
   Widget build(BuildContext context) {
     final purple = Theme.of(context).primaryColor;
+    // Use a ValueNotifier for region selection in a StatelessWidget
+    final ValueNotifier<String> selectedRegion = ValueNotifier<String>(regions[0]);
     return Scaffold(
       appBar: AppBar(title: Text('Election Voting'), backgroundColor: purple),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24.0),
+        padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 32.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            Icon(Icons.how_to_vote, color: purple, size: 80),
-            SizedBox(height: 24),
-            Text(
-              'Participate in the Election!',
-              style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: purple),
-              textAlign: TextAlign.center,
-            ),
-            SizedBox(height: 16),
-            Text(
-              'Your vote is your voice. Join the latest national and local elections to make a real impact on your community and country.',
-              style: TextStyle(fontSize: 16),
-              textAlign: TextAlign.center,
-            ),
-            SizedBox(height: 32),
-            Container(
-              padding: EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: purple.withOpacity(0.08),
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Column(
-                children: [
-                  Text(
-                    'Why Vote?',
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: purple),
+            // Election Info Card
+            _ElectionInfoCard(
+              electionName: 'National Election 2024',
+              electionType: 'National',
+              electionDate: '1 July 2024',
+              votingClose: votingClose,
+              onLearnMore: () {
+                showDialog(
+                  context: context,
+                  builder: (context) => AlertDialog(
+                    title: Text('Election Details'),
+                    content: Text('This is the National Election 2024. All verified citizens are eligible to vote. Voting closes on 1 July 2024 at 11:59 PM.'),
+                    actions: [TextButton(onPressed: () => Navigator.of(context).pop(), child: Text('Close'))],
                   ),
-                  SizedBox(height: 10),
-                  Text('• Influence government decisions\n• Support policies you believe in\n• Fulfill your civic duty\n• Help shape the future'),
+                );
+              },
+            ),
+            SizedBox(height: 18),
+            // Security & Trust Info Banner
+            Container(
+              width: double.infinity,
+              padding: EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+              margin: EdgeInsets.only(bottom: 10),
+              decoration: BoxDecoration(
+                color: Colors.green[50],
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: Colors.green[200]!, width: 1.2),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.green.withOpacity(0.08),
+                    blurRadius: 8,
+                    offset: Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.lock_rounded, color: Colors.green[700], size: 22),
+                  SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'Your vote is anonymous and secure',
+                      style: TextStyle(
+                        color: Colors.green[900],
+                        fontWeight: FontWeight.w600,
+                        fontSize: 15,
+                      ),
+                    ),
+                  ),
                 ],
               ),
             ),
-            SizedBox(height: 32),
+            SizedBox(height: 14),
+            // Live Turnout Stats
+            _LiveTurnoutStatsWidget(),
+            // Results Preview (after voting closes)
+            if (DateTime.now().isAfter(votingClose))
+              _ResultsPreviewWidget(),
+            Container(
+              decoration: BoxDecoration(
+                color: purple,
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: purple.withOpacity(0.18),
+                    blurRadius: 24,
+                    offset: Offset(0, 8),
+                  ),
+                ],
+              ),
+              child: CircleAvatar(
+                backgroundColor: Colors.transparent,
+                radius: 48,
+                child: Icon(Icons.how_to_vote, color: Colors.white, size: 56),
+              ),
+            ),
+            SizedBox(height: 28),
+            Text('Participate in the Election!', style: TextStyle(fontSize: 30, fontWeight: FontWeight.w900, color: purple)),
+            SizedBox(height: 12),
+            Text(
+              'Your vote is your voice. Join the latest national and local elections to make a real impact on your community and country.',
+              style: TextStyle(fontSize: 17, color: Colors.black87),
+              textAlign: TextAlign.center,
+            ),
+            SizedBox(height: 28),
+            // Region/Constituency Selector
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Text('Select your region/constituency:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: purple)),
+            ),
+            SizedBox(height: 10),
+            ValueListenableBuilder<String>(
+              valueListenable: selectedRegion,
+              builder: (context, value, _) => Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    padding: EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: purple.withOpacity(0.18)),
+                      boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 6, offset: Offset(0, 2))],
+                    ),
+                    child: DropdownButton<String>(
+                      value: value,
+                      isExpanded: true,
+                      underline: SizedBox(),
+                      icon: Icon(Icons.arrow_drop_down, color: purple),
+                      items: regions.map((r) => DropdownMenuItem(value: r, child: Text(r))).toList(),
+                      onChanged: (val) => selectedRegion.value = val!,
+                    ),
+                  ),
+                  SizedBox(height: 8),
+                  Text('You are voting in: $value', style: TextStyle(fontSize: 15, color: purple, fontWeight: FontWeight.w500)),
+                ],
+              ),
+            ),
+            SizedBox(height: 24),
+            // Why your vote matters (Voter Engagement)
             Container(
               width: double.infinity,
-              padding: EdgeInsets.all(16),
               margin: EdgeInsets.only(bottom: 24),
               decoration: BoxDecoration(
-                color: Colors.red.withOpacity(0.08),
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: Colors.red.withOpacity(0.18)),
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(18),
+                boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 10, offset: Offset(0, 4))],
+                border: Border(left: BorderSide(color: purple, width: 7)),
               ),
+              padding: EdgeInsets.fromLTRB(20, 20, 20, 20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.campaign, color: purple, size: 28),
+                      SizedBox(width: 10),
+                      Text('Why your vote matters', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 20, color: purple)),
+                    ],
+                  ),
+                  SizedBox(height: 14),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: [
+                      Column(
+                        children: [
+                          Icon(Icons.gavel, color: purple, size: 32),
+                          SizedBox(height: 4),
+                          Text('Influence', style: TextStyle(fontSize: 13)),
+                        ],
+                      ),
+                      Column(
+                        children: [
+                          Icon(Icons.favorite, color: purple, size: 32),
+                          SizedBox(height: 4),
+                          Text('Support', style: TextStyle(fontSize: 13)),
+                        ],
+                      ),
+                      Column(
+                        children: [
+                          Icon(Icons.emoji_people, color: purple, size: 32),
+                          SizedBox(height: 4),
+                          Text('Civic Duty', style: TextStyle(fontSize: 13)),
+                        ],
+                      ),
+                      Column(
+                        children: [
+                          Icon(Icons.public, color: purple, size: 32),
+                          SizedBox(height: 4),
+                          Text('Shape Future', style: TextStyle(fontSize: 13)),
+                        ],
+                      ),
+                    ],
+                  ),
+                  SizedBox(height: 18),
+                  // Placeholder for infographic or video
+                  GestureDetector(
+                    onTap: () {
+                      // TODO: Open video or infographic modal
+                    },
+                    child: Container(
+                      width: double.infinity,
+                      height: 140,
+                      decoration: BoxDecoration(
+                        color: Colors.grey[200],
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: Colors.grey[300]!),
+                      ),
+                      child: Center(
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.play_circle_fill, color: purple, size: 48),
+                            SizedBox(width: 12),
+                            Text('Watch: Why voting matters', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: purple)),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  SizedBox(height: 10),
+                  Text('Your vote is powerful. It helps shape the future of your community and country. Make it count!', style: TextStyle(fontSize: 15, color: Colors.black87)),
+                ],
+              ),
+            ),
+            // Important Notice
+            Container(
+              width: double.infinity,
+              margin: EdgeInsets.only(bottom: 36),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [BoxShadow(color: Colors.red.withOpacity(0.08), blurRadius: 8, offset: Offset(0, 2))],
+                border: Border(left: BorderSide(color: Colors.red, width: 7)),
+              ),
+              padding: EdgeInsets.fromLTRB(18, 16, 16, 16),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Icon(Icons.warning_amber_rounded, color: Colors.red, size: 28),
                   SizedBox(width: 12),
                   Expanded(
-                    child: Text(
-                      'Important: Each citizen can only vote once per election. Please make your selection carefully. Duplicate votes will not be counted.',
-                      style: TextStyle(color: Colors.red[800], fontWeight: FontWeight.w600),
+                    child: RichText(
+                      text: TextSpan(
+                        style: TextStyle(color: Colors.red[800], fontWeight: FontWeight.w700, fontSize: 15),
+                        children: [
+                          TextSpan(text: 'Important: '),
+                          TextSpan(
+                            text: 'Each citizen can only vote once per election. ',
+                            style: TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                          TextSpan(text: 'Please make your selection carefully. Duplicate votes will not be counted.'),
+                        ],
+                      ),
                     ),
                   ),
                 ],
               ),
             ),
-            ElevatedButton.icon(
-              icon: Icon(Icons.how_to_vote, color: Colors.white),
-              label: Text('Go to Voting Page', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 22)),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: purple,
-                padding: EdgeInsets.symmetric(vertical: 24, horizontal: 32),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                minimumSize: Size(double.infinity, 72),
-                elevation: 4,
+            // Action Button
+            SizedBox(
+              width: double.infinity,
+              height: 62,
+              child: ElevatedButton.icon(
+                icon: Icon(Icons.how_to_vote, color: Colors.white, size: 30),
+                label: Text('Go to Voting Page', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 22)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: purple,
+                  padding: EdgeInsets.symmetric(vertical: 20),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+                  elevation: 10,
+                  shadowColor: purple.withOpacity(0.18),
+                ),
+                onPressed: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => PartyVotingPage()),
+                  );
+                },
               ),
-              onPressed: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => PartyVotingPage()),
-                );
-              },
+            ),
+            SizedBox(height: 32),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ElectionInfoCard extends StatefulWidget {
+  final String electionName;
+  final String electionType;
+  final String electionDate;
+  final DateTime votingClose;
+  final VoidCallback onLearnMore;
+  const _ElectionInfoCard({
+    required this.electionName,
+    required this.electionType,
+    required this.electionDate,
+    required this.votingClose,
+    required this.onLearnMore,
+  });
+  @override
+  State<_ElectionInfoCard> createState() => _ElectionInfoCardState();
+}
+
+class _ElectionInfoCardState extends State<_ElectionInfoCard> {
+  late Timer _timer;
+  late Duration _remaining;
+
+  @override
+  void initState() {
+    super.initState();
+    _remaining = widget.votingClose.difference(DateTime.now());
+    _timer = Timer.periodic(Duration(seconds: 1), (_) {
+      setState(() {
+        _remaining = widget.votingClose.difference(DateTime.now());
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer.cancel();
+    super.dispose();
+  }
+
+  String get _countdown {
+    if (_remaining.isNegative) return 'Voting closed';
+    final d = _remaining.inDays;
+    final h = _remaining.inHours % 24;
+    final m = _remaining.inMinutes % 60;
+    final s = _remaining.inSeconds % 60;
+    if (d > 0) return '$d days $h h $m m';
+    if (h > 0) return '$h h $m m $s s';
+    if (m > 0) return '$m m $s s';
+    return '$s seconds';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final purple = Theme.of(context).primaryColor;
+    final isClosed = _remaining.isNegative;
+    return Container(
+      margin: EdgeInsets.only(bottom: 28),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 24, offset: Offset(0, 8))],
+        border: Border(left: BorderSide(color: purple, width: 6)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(22.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.how_to_vote, color: purple, size: 32),
+                SizedBox(width: 12),
+                Expanded(
+                  child: Text(widget.electionName, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 22, color: purple)),
+                ),
+                Container(
+                  padding: EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: purple.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.verified, color: purple, size: 18),
+                      SizedBox(width: 4),
+                      Text('National', style: TextStyle(color: purple, fontWeight: FontWeight.bold)),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            SizedBox(height: 14),
+            Row(
+              children: [
+                Icon(Icons.calendar_today, color: purple, size: 18),
+                SizedBox(width: 6),
+                Text('Date: ${widget.electionDate}', style: TextStyle(fontSize: 15)),
+                Spacer(),
+                Container(
+                  padding: EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: isClosed ? Colors.red[100] : Colors.green[100],
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.timer, color: isClosed ? Colors.red : Colors.green, size: 18),
+                      SizedBox(width: 4),
+                      Text(
+                        isClosed ? 'Voting closed' : _countdown,
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: isClosed ? Colors.red : Colors.green[800],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            SizedBox(height: 10),
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton.icon(
+                onPressed: widget.onLearnMore,
+                icon: Icon(Icons.info_outline, color: purple, size: 18),
+                label: Text('Learn more', style: TextStyle(color: purple, fontWeight: FontWeight.bold)),
+              ),
             ),
           ],
         ),
@@ -723,15 +1065,8 @@ class AnalyticsPage extends StatelessWidget {
                             ),
                             PieChartSectionData(
                               color: Colors.purple[200],
-                              value: 20,
+                              value: 30,
                               title: 'B40',
-                              radius: 50,
-                              titleStyle: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
-                            ),
-                            PieChartSectionData(
-                              color: Colors.grey[400],
-                              value: 10,
-                              title: 'Others',
                               radius: 50,
                               titleStyle: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
                             ),
@@ -751,11 +1086,11 @@ class AnalyticsPage extends StatelessWidget {
                         _PieLegend(color: Colors.purpleAccent, label: 'M40'),
                         SizedBox(width: 16),
                         _PieLegend(color: Colors.purple[200]!, label: 'B40'),
-                        SizedBox(width: 16),
-                        _PieLegend(color: Colors.grey[400]!, label: 'Others'),
                       ],
                     ),
                     SizedBox(height: 24),
+                    // Election Results & Analysis Card (after analytics)
+                    _ElectionResultsAnalysisCard(),
                   ],
                 ),
               ),
@@ -918,7 +1253,11 @@ class SettingsPage extends StatelessWidget {
             children: [
               Text('Settings', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: purple)),
               SizedBox(height: 24),
-              _SettingsTile(icon: Icons.person, label: 'Profile', onTap: () {}),
+              _SettingsTile(icon: Icons.person, label: 'Profile', onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => ProfileScreen()),
+                );
+              }),
               _SettingsTile(icon: Icons.lock, label: 'Change Password', onTap: () {}),
               _SettingsTile(icon: Icons.notifications, label: 'Notifications', onTap: () {}),
               _SettingsTile(icon: Icons.logout, label: 'Sign Out', onTap: () {
@@ -1391,66 +1730,93 @@ class VotePolicyListPage extends StatelessWidget {
                               final selectedVote = await showDialog<String>(
                                 context: context,
                                 builder: (context) => Center(
-                                  child: ConstrainedBox(
-                                    constraints: BoxConstraints(maxWidth: 340), // Increase dialog width
-                                    child: AlertDialog(
-                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)), // Only one shape argument
-                                      title: Center(
-                                        child: Text(
-                                          'Cast Your Vote',
-                                          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                                          textAlign: TextAlign.center,
-                                        ),
-                                      ),
-                                      content: Padding(
-                                        padding: const EdgeInsets.symmetric(vertical: 16.0, horizontal: 8.0), // More padding
-                                        child: Text(
-                                          'Do you support this policy?',
-                                          style: TextStyle(fontSize: 16),
-                                          textAlign: TextAlign.center,
-                                        ),
-                                      ),
-                                      contentPadding: EdgeInsets.fromLTRB(24, 18, 24, 0),
-                                      actionsPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-                                      actionsAlignment: MainAxisAlignment.center,
-                                      actions: [
-                                        Row(
-                                          mainAxisAlignment: MainAxisAlignment.center,
-                                          children: [
-                                            SizedBox(
-                                              width: 90,
-                                              height: 44,
-                                              child: ElevatedButton(
-                                                style: ElevatedButton.styleFrom(
-                                                  backgroundColor: Theme.of(context).primaryColor,
-                                                  foregroundColor: Colors.white,
-                                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                                                  padding: EdgeInsets.symmetric(vertical: 10),
-                                                  elevation: 2,
+                                  child: TweenAnimationBuilder<double>(
+                                    tween: Tween(begin: 0.8, end: 1.0),
+                                    duration: Duration(milliseconds: 220),
+                                    curve: Curves.easeOutBack,
+                                    builder: (context, scale, child) => Transform.scale(
+                                      scale: scale,
+                                      child: child,
+                                    ),
+                                    child: ConstrainedBox(
+                                      constraints: BoxConstraints(maxWidth: 160), // Even smaller
+                                      child: Material(
+                                        color: Colors.transparent,
+                                        elevation: 18,
+                                        borderRadius: BorderRadius.circular(32),
+                                        child: ClipRRect(
+                                          borderRadius: BorderRadius.circular(32),
+                                          child: BackdropFilter(
+                                            filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+                                            child: Container(
+                                              decoration: BoxDecoration(
+                                                color: Colors.white.withOpacity(0.92),
+                                                borderRadius: BorderRadius.circular(32),
+                                                boxShadow: [
+                                                  BoxShadow(
+                                                    color: Colors.black26,
+                                                    blurRadius: 32,
+                                                    offset: Offset(0, 8),
+                                                  ),
+                                                ],
+                                              ),
+                                              child: Padding(
+                                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 16),
+                                                child: Column(
+                                                  mainAxisSize: MainAxisSize.min,
+                                                  children: [
+                                                    Icon(Icons.how_to_vote, color: Theme.of(context).primaryColor, size: 32),
+                                                    SizedBox(height: 8),
+                                                    Text(
+                                                      'Cast Your Vote',
+                                                      style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                                                      textAlign: TextAlign.center,
+                                                    ),
+                                                    SizedBox(height: 8),
+                                                    Text(
+                                                      'Do you support this policy?',
+                                                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
+                                                      textAlign: TextAlign.center,
+                                                    ),
+                                                    SizedBox(height: 14),
+                                                    Row(
+                                                      children: [
+                                                        Expanded(
+                                                          child: ElevatedButton(
+                                                            style: ElevatedButton.styleFrom(
+                                                              backgroundColor: Theme.of(context).primaryColor,
+                                                              foregroundColor: Colors.white,
+                                                              shape: StadiumBorder(),
+                                                              padding: EdgeInsets.symmetric(vertical: 8),
+                                                              elevation: 2,
+                                                            ),
+                                                            onPressed: () => Navigator.of(context).pop('no'),
+                                                            child: Text('No', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                                                          ),
+                                                        ),
+                                                        SizedBox(width: 8),
+                                                        Expanded(
+                                                          child: ElevatedButton(
+                                                            style: ElevatedButton.styleFrom(
+                                                              backgroundColor: Theme.of(context).primaryColor,
+                                                              foregroundColor: Colors.white,
+                                                              shape: StadiumBorder(),
+                                                              padding: EdgeInsets.symmetric(vertical: 8),
+                                                              elevation: 2,
+                                                            ),
+                                                            onPressed: () => Navigator.of(context).pop('yes'),
+                                                            child: Text('Yes', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                                                          ),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                  ],
                                                 ),
-                                                onPressed: () => Navigator.of(context).pop('no'),
-                                                child: Text('No', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                                               ),
                                             ),
-                                            SizedBox(width: 24),
-                                            SizedBox(
-                                              width: 90,
-                                              height: 44,
-                                              child: ElevatedButton(
-                                                style: ElevatedButton.styleFrom(
-                                                  backgroundColor: Theme.of(context).primaryColor,
-                                                  foregroundColor: Colors.white,
-                                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                                                  padding: EdgeInsets.symmetric(vertical: 10),
-                                                  elevation: 2,
-                                                ),
-                                                onPressed: () => Navigator.of(context).pop('yes'),
-                                                child: Text('Yes', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                                              ),
-                                            ),
-                                          ],
+                                          ),
                                         ),
-                                      ],
+                                      ),
                                     ),
                                   ),
                                 ),
@@ -1731,12 +2097,47 @@ class PartyVotingPage extends StatefulWidget {
 
 class _PartyVotingPageState extends State<PartyVotingPage> {
   String? selectedParty;
-  final List<String> parties = [
-    'Party A',
-    'Party B',
-    'Party C',
-    'Party D',
+  final List<_PartyInfo> parties = [
+    _PartyInfo(
+      name: 'Party A',
+      logo: Icons.flag,
+      bio: 'Progressive party focused on technology and education.',
+      policies: ['Universal internet access', 'STEM education', 'Green energy'],
+      manifesto: 'Party A believes in a tech-driven future, investing in education, and sustainable energy for all.',
+    ),
+    _PartyInfo(
+      name: 'Party B',
+      logo: Icons.eco,
+      bio: 'Environmental party with a focus on sustainability.',
+      policies: ['Clean water', 'Forest protection', 'Renewable energy'],
+      manifesto: 'Party B is committed to protecting the environment and ensuring a green future for generations to come.',
+    ),
+    _PartyInfo(
+      name: 'Party C',
+      logo: Icons.people,
+      bio: 'Social party prioritizing healthcare and welfare.',
+      policies: ['Universal healthcare', 'Affordable housing', 'Social safety nets'],
+      manifesto: 'Party C stands for equal opportunity, healthcare for all, and strong social support systems.',
+    ),
+    _PartyInfo(
+      name: 'Party D',
+      logo: Icons.business,
+      bio: 'Business-oriented party supporting entrepreneurship.',
+      policies: ['Small business grants', 'Tax incentives', 'Job creation'],
+      manifesto: 'Party D empowers entrepreneurs, supports job growth, and fosters a thriving economy.',
+    ),
   ];
+  final Set<String> compareSelection = {};
+
+  void _toggleCompare(String party) {
+    setState(() {
+      if (compareSelection.contains(party)) {
+        compareSelection.remove(party);
+      } else if (compareSelection.length < 2) {
+        compareSelection.add(party);
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1744,100 +2145,342 @@ class _PartyVotingPageState extends State<PartyVotingPage> {
     return Scaffold(
       appBar: AppBar(title: Text('Vote for a Party'), backgroundColor: purple),
       body: Padding(
-        padding: const EdgeInsets.all(24.0),
+        padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 24.0),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            Text('Select your preferred party:', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: purple)),
+            SizedBox(height: 32),
+            Icon(Icons.how_to_vote, color: purple, size: 48),
+            SizedBox(height: 12),
+            Text('Vote for a Party', style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: purple)),
+            SizedBox(height: 8),
+            Text('Select your preferred party:', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: purple)),
             SizedBox(height: 24),
             Expanded(
-              child: ListView.separated(
-                itemCount: parties.length,
-                separatorBuilder: (context, index) => SizedBox(height: 24),
-                itemBuilder: (context, index) {
-                  final party = parties[index];
-                  final isSelected = selectedParty == party;
-                  return GestureDetector(
-                    onTap: () => setState(() => selectedParty = party),
-                    child: Container(
-                      width: double.infinity,
-                      padding: EdgeInsets.symmetric(vertical: 32, horizontal: 20),
-                      decoration: BoxDecoration(
-                        color: isSelected ? purple.withOpacity(0.15) : Colors.white,
-                        borderRadius: BorderRadius.circular(18),
-                        border: Border.all(
-                          color: isSelected ? purple : Colors.grey.shade300,
-                          width: isSelected ? 2.5 : 1.2,
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black12,
-                            blurRadius: 8,
-                            offset: Offset(0, 2),
+              child: ListView(
+                children: parties.map((party) => _PartyCard(
+                  party: party,
+                  selected: selectedParty == party.name,
+                  onSelect: () => setState(() => selectedParty = party.name),
+                  compareSelected: compareSelection.contains(party.name),
+                  onCompare: () => _toggleCompare(party.name),
+                )).toList(),
+              ),
+            ),
+            if (compareSelection.length == 2)
+              _PartyCompareCard(
+                partyA: parties.firstWhere((p) => p.name == compareSelection.elementAt(0)),
+                partyB: parties.firstWhere((p) => p.name == compareSelection.elementAt(1)),
+              ),
+            SizedBox(height: 24),
+            SizedBox(
+              width: double.infinity,
+              height: 60,
+              child: ElevatedButton.icon(
+                icon: Icon(Icons.how_to_vote, color: Colors.white, size: 28),
+                label: Text('Submit Vote', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 20)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: selectedParty == null ? Colors.grey[300] : purple,
+                  padding: EdgeInsets.symmetric(vertical: 18),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  elevation: selectedParty == null ? 0 : 8,
+                  shadowColor: purple.withOpacity(0.18),
+                ),
+                onPressed: selectedParty == null ? null : () async {
+                  final region = 'Kuala Lumpur, Federal Territory'; // Replace with actual selected region if available
+                  final confirmed = await showDialog<bool>(
+                    context: context,
+                    barrierDismissible: false,
+                    builder: (context) => Center(
+                      child: ConstrainedBox(
+                        constraints: BoxConstraints(maxWidth: 340),
+                        child: AlertDialog(
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+                          elevation: 14,
+                          titlePadding: EdgeInsets.only(top: 24, left: 24, right: 24, bottom: 0),
+                          title: Column(
+                            children: [
+                              Icon(Icons.how_to_vote, color: purple, size: 34),
+                              SizedBox(height: 8),
+                              Text('Review Your Vote', textAlign: TextAlign.center, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20)),
+                            ],
                           ),
-                        ],
-                      ),
-                      child: Center(
-                        child: Text(
-                          party,
-                          style: TextStyle(
-                            fontSize: 24,
-                            fontWeight: FontWeight.bold,
-                            color: isSelected ? purple : Colors.black87,
+                          contentPadding: EdgeInsets.symmetric(horizontal: 24, vertical: 10),
+                          content: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              RichText(
+                                textAlign: TextAlign.center,
+                                text: TextSpan(
+                                  style: TextStyle(color: Colors.black87, fontSize: 16),
+                                  children: [
+                                    TextSpan(text: 'You are about to vote for:\n'),
+                                    TextSpan(text: ' 24selectedParty', style: TextStyle(fontWeight: FontWeight.bold, color: purple)),
+                                    TextSpan(text: ' in '),
+                                    TextSpan(text: region, style: TextStyle(fontWeight: FontWeight.bold, color: purple)),
+                                    TextSpan(text: '.'),
+                                  ],
+                                ),
+                              ),
+                              SizedBox(height: 16),
+                              Divider(),
+                              SizedBox(height: 10),
+                              Container(
+                                padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                decoration: BoxDecoration(
+                                  color: Colors.red[50],
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Icon(Icons.warning_amber_rounded, color: Colors.red, size: 20),
+                                    SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text(
+                                        'Once you confirm, your vote will be permanently recorded and cannot be changed.',
+                                        style: TextStyle(color: Colors.red[700], fontWeight: FontWeight.bold, fontSize: 13),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
                           ),
+                          actionsPadding: EdgeInsets.fromLTRB(16, 8, 16, 20),
+                          actionsAlignment: MainAxisAlignment.center,
+                          actions: [
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: OutlinedButton(
+                                    onPressed: () => Navigator.of(context).pop(false),
+                                    child: Text('Edit', style: TextStyle(fontSize: 15)),
+                                    style: OutlinedButton.styleFrom(
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                      minimumSize: Size(0, 48),
+                                    ),
+                                  ),
+                                ),
+                                SizedBox(width: 18),
+                                Expanded(
+                                  child: ElevatedButton(
+                                    onPressed: () => Navigator.of(context).pop(true),
+                                    child: Text('Confirm', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: purple,
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                      minimumSize: Size(0, 48),
+                                      elevation: 4,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
                         ),
                       ),
                     ),
                   );
+                  if (confirmed == true) {
+                    // Show animated confirmation
+                    await showDialog(
+                      context: context,
+                      barrierDismissible: false,
+                      builder: (context) => _VoteConfirmationDialog(),
+                    );
+                    final scaffoldMessenger = ScaffoldMessenger.of(context);
+                    try {
+                      final api = ApiService();
+                      final data = await api.submitVote('some_user', selectedParty!, selectedParty!, 'did:example');
+                      final message = (data['message'] ?? '').toString().toLowerCase();
+                      if (data['success'] == true || message.contains('recorded successfully')) {
+                        Navigator.of(context).pushReplacement(
+                          MaterialPageRoute(
+                            builder: (_) => NotarizationReceiptPage(
+                              party: selectedParty!,
+                              receipt: data['notarization_receipt'] ?? '',
+                              message: data['message'] ?? 'Vote recorded.',
+                            ),
+                          ),
+                        );
+                      } else {
+                        scaffoldMessenger.showSnackBar(
+                          SnackBar(content: Text('Backend error: ${data['message']}')),
+                        );
+                      }
+                    } catch (e) {
+                      scaffoldMessenger.showSnackBar(
+                        SnackBar(content: Text('Failed to connect to backend: $e')),
+                      );
+                    }
+                  }
                 },
               ),
             ),
             SizedBox(height: 32),
-            SizedBox(
-              width: double.infinity,
-              height: 64,
-              child: ElevatedButton.icon(
-                icon: Icon(Icons.how_to_vote, color: Colors.white, size: 32),
-                label: Text('Submit Vote', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 22)),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: purple,
-                  padding: EdgeInsets.symmetric(vertical: 18),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                ),
-                onPressed: selectedParty == null
-                    ? null
-                    : () async {
-                        final scaffoldMessenger = ScaffoldMessenger.of(context);
-                        try {
-                          final api = ApiService();
-                          final data = await api.submitVote('some_user', selectedParty!, selectedParty!, 'did:example');
-                          final message = (data['message'] ?? '').toString().toLowerCase();
-                          if (data['success'] == true || message.contains('recorded successfully')) {
-                            Navigator.of(context).pushReplacement(
-                              MaterialPageRoute(
-                                builder: (_) => NotarizationReceiptPage(
-                                  party: selectedParty!,
-                                  receipt: data['notarization_receipt'] ?? '',
-                                  message: data['message'] ?? 'Vote recorded.',
-                                ),
-                              ),
-                            );
-                          } else {
-                            scaffoldMessenger.showSnackBar(
-                              SnackBar(content: Text('Backend error: ${data['message']}')),
-                            );
-                          }
-                        } catch (e) {
-                          scaffoldMessenger.showSnackBar(
-                            SnackBar(content: Text('Failed to connect to backend: $e')),
-                          );
-                        }
-                      },
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PartyInfo {
+  final String name;
+  final IconData logo;
+  final String bio;
+  final List<String> policies;
+  final String manifesto;
+  _PartyInfo({required this.name, required this.logo, required this.bio, required this.policies, required this.manifesto});
+}
+
+class _PartyCard extends StatefulWidget {
+  final _PartyInfo party;
+  final bool selected;
+  final VoidCallback onSelect;
+  final bool compareSelected;
+  final VoidCallback onCompare;
+  const _PartyCard({required this.party, required this.selected, required this.onSelect, required this.compareSelected, required this.onCompare});
+  @override
+  State<_PartyCard> createState() => _PartyCardState();
+}
+
+class _PartyCardState extends State<_PartyCard> {
+  bool expanded = false;
+  @override
+  Widget build(BuildContext context) {
+    final purple = Theme.of(context).primaryColor;
+    return AnimatedContainer(
+      duration: Duration(milliseconds: 180),
+      curve: Curves.easeOut,
+      margin: EdgeInsets.only(bottom: 20),
+      decoration: BoxDecoration(
+        color: widget.selected ? purple : Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 10, offset: Offset(0, 4))],
+        border: Border.all(
+          color: widget.selected ? purple : Colors.grey.shade300,
+          width: widget.selected ? 2.5 : 1.2,
+        ),
+      ),
+      child: Column(
+        children: [
+          ListTile(
+            onTap: widget.onSelect,
+            leading: Icon(widget.party.logo, color: widget.selected ? Colors.white : purple, size: 32),
+            title: Text(
+              widget.party.name,
+              style: TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.bold,
+                color: widget.selected ? Colors.white : Colors.black87,
               ),
+            ),
+            subtitle: Text(widget.party.bio, style: TextStyle(color: widget.selected ? Colors.white70 : Colors.black54)),
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconButton(
+                  icon: Icon(expanded ? Icons.expand_less : Icons.expand_more, color: widget.selected ? Colors.white : purple),
+                  onPressed: () => setState(() => expanded = !expanded),
+                ),
+                IconButton(
+                  icon: Icon(Icons.compare_arrows, color: widget.compareSelected ? purple : Colors.grey),
+                  tooltip: widget.compareSelected ? 'Remove from compare' : 'Compare',
+                  onPressed: widget.onCompare,
+                ),
+              ],
+            ),
+          ),
+          if (expanded)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Key Policies:', style: TextStyle(fontWeight: FontWeight.bold, color: widget.selected ? Colors.white : purple)),
+                  SizedBox(height: 6),
+                  ...widget.party.policies.map((p) => Row(
+                    children: [
+                      Icon(Icons.check, color: widget.selected ? Colors.white : purple, size: 18),
+                      SizedBox(width: 8),
+                      Expanded(child: Text(p, style: TextStyle(color: widget.selected ? Colors.white : Colors.black87))),
+                    ],
+                  )),
+                  SizedBox(height: 10),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton(
+                      onPressed: () => showDialog(
+                        context: context,
+                        builder: (context) => AlertDialog(
+                          title: Text('${widget.party.name} Manifesto'),
+                          content: Text(widget.party.manifesto),
+                          actions: [TextButton(onPressed: () => Navigator.of(context).pop(), child: Text('Close'))],
+                        ),
+                      ),
+                      child: Text('Read more', style: TextStyle(color: purple, fontWeight: FontWeight.bold)),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PartyCompareCard extends StatelessWidget {
+  final _PartyInfo partyA;
+  final _PartyInfo partyB;
+  const _PartyCompareCard({required this.partyA, required this.partyB});
+  @override
+  Widget build(BuildContext context) {
+    final purple = Theme.of(context).primaryColor;
+    return Card(
+      margin: EdgeInsets.only(bottom: 24),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      elevation: 6,
+      child: Padding(
+        padding: const EdgeInsets.all(18.0),
+        child: Column(
+          children: [
+            Text('Compare Parties', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: purple)),
+            SizedBox(height: 14),
+            Row(
+              children: [
+                Expanded(child: _compareColumn(partyA, purple)),
+                SizedBox(width: 18),
+                Expanded(child: _compareColumn(partyB, purple)),
+              ],
             ),
           ],
         ),
       ),
+    );
+  }
+
+  Widget _compareColumn(_PartyInfo party, Color purple) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Icon(party.logo, color: purple, size: 32),
+        SizedBox(height: 6),
+        Text(party.name, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+        SizedBox(height: 6),
+        Text(party.bio, textAlign: TextAlign.center, style: TextStyle(fontSize: 13, color: Colors.black54)),
+        SizedBox(height: 8),
+        Text('Key Policies:', style: TextStyle(fontWeight: FontWeight.bold, color: purple)),
+        ...party.policies.map((p) => Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.check, color: purple, size: 16),
+            SizedBox(width: 4),
+            Flexible(child: Text(p, style: TextStyle(fontSize: 13))),
+          ],
+        )),
+      ],
     );
   }
 }
@@ -1900,6 +2543,41 @@ class NotarizationReceiptPage extends StatelessWidget {
             children: [
               Icon(Icons.verified, color: purple, size: 64),
               SizedBox(height: 24),
+              // Blockchain/Notarization Status Banner
+              Container(
+                width: double.infinity,
+                padding: EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+                margin: EdgeInsets.only(bottom: 18),
+                decoration: BoxDecoration(
+                  color: Colors.green[50],
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: Colors.green[200]!, width: 1.2),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.green.withOpacity(0.08),
+                      blurRadius: 8,
+                      offset: Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.check_circle_rounded, color: Colors.green[700], size: 22),
+                    SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        'Your vote is now recorded on the IOTA ledger',
+                        style: TextStyle(
+                          color: Colors.green[900],
+                          fontWeight: FontWeight.w600,
+                          fontSize: 15,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
               Text('Your vote for', style: TextStyle(fontSize: 18)),
               SizedBox(height: 8),
               Text(party, style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: purple)),
@@ -1926,6 +2604,56 @@ class NotarizationReceiptPage extends StatelessWidget {
                   child: Text('Back to Home', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
                 ),
               ),
+              SizedBox(height: 32),
+              // Share Badge Card
+              Container(
+                width: double.infinity,
+                margin: EdgeInsets.only(bottom: 18),
+                padding: EdgeInsets.symmetric(horizontal: 18, vertical: 18),
+                decoration: BoxDecoration(
+                  color: Colors.purple[50],
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(color: purple.withOpacity(0.18)),
+                  boxShadow: [
+                    BoxShadow(
+                      color: purple.withOpacity(0.08),
+                      blurRadius: 8,
+                      offset: Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.emoji_events, color: purple, size: 32),
+                        SizedBox(width: 10),
+                        Text('I Voted Nationally!', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: purple)),
+                      ],
+                    ),
+                    SizedBox(height: 10),
+                    Text('Proud voter in the National Election 2024', style: TextStyle(fontSize: 15, color: purple)),
+                    SizedBox(height: 14),
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        icon: Icon(Icons.share, color: purple),
+                        label: Text('Share your badge', style: TextStyle(fontWeight: FontWeight.bold, color: purple)),
+                        style: OutlinedButton.styleFrom(
+                          side: BorderSide(color: purple),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                          padding: EdgeInsets.symmetric(vertical: 14),
+                        ),
+                        onPressed: () async {
+                          // Import share_plus at the top: import 'package:share_plus/share_plus.dart';
+                          await Share.share('I just voted in the National Election 2024! 🇲🇾 #IVoted #GovVote');
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ],
           ),
         ),
@@ -1949,4 +2677,399 @@ class _PieLegend extends StatelessWidget {
       ],
     );
   }
+}
+
+// Add the animated confirmation dialog:
+class _VoteConfirmationDialog extends StatefulWidget {
+  @override
+  State<_VoteConfirmationDialog> createState() => _VoteConfirmationDialogState();
+}
+
+class _VoteConfirmationDialogState extends State<_VoteConfirmationDialog> with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(vsync: this, duration: Duration(milliseconds: 900));
+    _controller.forward();
+    Future.delayed(Duration(milliseconds: 1200), () => Navigator.of(context).pop());
+  }
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+  @override
+  Widget build(BuildContext context) {
+    final purple = Theme.of(context).primaryColor;
+    return Center(
+      child: ScaleTransition(
+        scale: CurvedAnimation(parent: _controller, curve: Curves.elasticOut),
+        child: Container(
+          padding: EdgeInsets.all(32),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(32),
+            boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 24, offset: Offset(0, 8))],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.verified, color: purple, size: 64),
+              SizedBox(height: 18),
+              Text('Vote Submitted!', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 22, color: purple)),
+              SizedBox(height: 8),
+              Text('Thank you for voting.', style: TextStyle(fontSize: 16)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// Add this widget at the end of the file
+class _PostVoteFeedbackDialog extends StatefulWidget {
+  @override
+  State<_PostVoteFeedbackDialog> createState() => _PostVoteFeedbackDialogState();
+}
+
+class _PostVoteFeedbackDialogState extends State<_PostVoteFeedbackDialog> {
+  int? selected;
+  final emojis = ['😡', '😕', '😐', '🙂', '😍'];
+  final labels = ['Terrible', 'Bad', 'Okay', 'Good', 'Great!'];
+  bool submitted = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final purple = Theme.of(context).primaryColor;
+    return AlertDialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+      title: Column(
+        children: [
+          Icon(Icons.feedback, color: purple, size: 32),
+          SizedBox(height: 8),
+          Text('How was your voting experience?', textAlign: TextAlign.center, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+        ],
+      ),
+      content: submitted
+          ? Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.check_circle, color: Colors.green, size: 36),
+                SizedBox(height: 10),
+                Text('Thank you for your feedback!', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16)),
+              ],
+            )
+          : Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: List.generate(emojis.length, (i) => GestureDetector(
+                    onTap: () => setState(() => selected = i),
+                    child: AnimatedContainer(
+                      duration: Duration(milliseconds: 180),
+                      padding: EdgeInsets.all(selected == i ? 8 : 4),
+                      decoration: BoxDecoration(
+                        color: selected == i ? purple.withOpacity(0.12) : Colors.transparent,
+                        borderRadius: BorderRadius.circular(12),
+                        border: selected == i ? Border.all(color: purple, width: 2) : null,
+                      ),
+                      child: Text(emojis[i], style: TextStyle(fontSize: 32)),
+                    ),
+                  )),
+                ),
+                SizedBox(height: 10),
+                if (selected != null)
+                  Text(labels[selected!], style: TextStyle(fontWeight: FontWeight.w500, color: purple)),
+              ],
+            ),
+      actions: [
+        if (!submitted)
+          TextButton(
+            onPressed: selected == null
+                ? null
+                : () {
+                    setState(() => submitted = true);
+                    // TODO: Send/store feedback
+                    print('User feedback:  {labels[selected!]}');
+                    Future.delayed(Duration(milliseconds: 900), () => Navigator.of(context).pop());
+                  },
+            child: Text('Submit', style: TextStyle(fontWeight: FontWeight.bold, color: purple)),
+          ),
+        if (submitted)
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: Text('Close', style: TextStyle(fontWeight: FontWeight.bold, color: purple)),
+          ),
+      ],
+    );
+  }
+}
+
+// Add this widget at the end of the file
+class _LiveTurnoutStatsWidget extends StatefulWidget {
+  @override
+  State<_LiveTurnoutStatsWidget> createState() => _LiveTurnoutStatsWidgetState();
+}
+
+class _LiveTurnoutStatsWidgetState extends State<_LiveTurnoutStatsWidget> {
+  int? voted;
+  int? eligible;
+  bool loading = true;
+  bool error = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchStats();
+  }
+
+  Future<void> _fetchStats() async {
+    setState(() { loading = true; error = false; });
+    try {
+      final api = ApiService();
+      final data = await api.getTurnoutStats();
+      setState(() {
+        voted = data['voted'] ?? 0;
+        eligible = data['eligible'] ?? 1;
+        loading = false;
+      });
+    } catch (e) {
+      setState(() { error = true; loading = false; });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final purple = Theme.of(context).primaryColor;
+    if (loading) {
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 16),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: purple)),
+            SizedBox(width: 10),
+            Text('Loading turnout stats...', style: TextStyle(color: purple)),
+          ],
+        ),
+      );
+    }
+    if (error || voted == null || eligible == null) {
+      return SizedBox.shrink();
+    }
+    final percent = (voted! / eligible!).clamp(0.0, 1.0);
+    final percentText = (percent * 100).toStringAsFixed(1);
+    return Container(
+      width: double.infinity,
+      margin: EdgeInsets.only(bottom: 16),
+      padding: EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+      decoration: BoxDecoration(
+        color: Colors.blue[50],
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.blue[200]!, width: 1.2),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.blue.withOpacity(0.08),
+            blurRadius: 8,
+            offset: Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.people, color: Colors.blue[700], size: 22),
+              SizedBox(width: 10),
+              Text('$percentText% of eligible voters have voted so far.', style: TextStyle(color: Colors.blue[900], fontWeight: FontWeight.w600, fontSize: 15)),
+            ],
+          ),
+          SizedBox(height: 8),
+          LinearProgressIndicator(
+            value: percent,
+            minHeight: 8,
+            backgroundColor: Colors.blue[100],
+            color: Colors.blue[700],
+            borderRadius: BorderRadius.circular(8),
+          ),
+        ],
+      ),
+    );
+  }
 } 
+
+// Add this widget at the end of the file
+class _ResultsPreviewWidget extends StatefulWidget {
+  @override
+  State<_ResultsPreviewWidget> createState() => _ResultsPreviewWidgetState();
+}
+
+class _ResultsPreviewWidgetState extends State<_ResultsPreviewWidget> {
+  Map<String, dynamic>? results;
+  bool loading = true;
+  bool error = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchResults();
+  }
+
+  Future<void> _fetchResults() async {
+    setState(() { loading = true; error = false; });
+    try {
+      final api = ApiService();
+      final data = await api.getElectionResults();
+      setState(() {
+        results = data;
+        loading = false;
+      });
+    } catch (e) {
+      setState(() { error = true; loading = false; });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final purple = Theme.of(context).primaryColor;
+    if (loading) {
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 16),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: purple)),
+            SizedBox(width: 10),
+            Text('Loading results...', style: TextStyle(color: purple)),
+          ],
+        ),
+      );
+    }
+    if (error || results == null || results!.isEmpty) {
+      return SizedBox.shrink();
+    }
+    final totalVotes = results!.values.fold<int>(0, (a, b) => a + (b as int));
+    final colors = [
+      Colors.deepPurple,
+      Colors.purpleAccent,
+      Colors.purple[200]!,
+      Colors.blue[400]!,
+      Colors.green[400]!,
+      Colors.orange[400]!,
+      Colors.red[400]!,
+      Colors.grey[400]!,
+    ];
+    final partyNames = results!.keys.toList();
+    return Container(
+      width: double.infinity,
+      margin: EdgeInsets.only(bottom: 16),
+      padding: EdgeInsets.symmetric(horizontal: 18, vertical: 18),
+      decoration: BoxDecoration(
+        color: Colors.yellow[50],
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.yellow[200]!, width: 1.2),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.yellow.withOpacity(0.08),
+            blurRadius: 8,
+            offset: Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.bar_chart, color: Colors.orange[700], size: 22),
+              SizedBox(width: 10),
+              Text('Results Preview', style: TextStyle(color: Colors.orange[900], fontWeight: FontWeight.w700, fontSize: 16)),
+            ],
+          ),
+          SizedBox(height: 12),
+          SizedBox(
+            height: 220,
+            child: PieChart(
+              PieChartData(
+                sections: [
+                  for (int i = 0; i < partyNames.length; i++)
+                    PieChartSectionData(
+                      color: colors[i % colors.length],
+                      value: (results![partyNames[i]] as int).toDouble(),
+                      title: partyNames[i],
+                      radius: 50,
+                      titleStyle: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
+                    ),
+                ],
+                sectionsSpace: 2,
+                centerSpaceRadius: 30,
+              ),
+            ),
+          ),
+          SizedBox(height: 12),
+          // Legend
+          Wrap(
+            alignment: WrapAlignment.center,
+            spacing: 16,
+            children: [
+              for (int i = 0; i < partyNames.length; i++)
+                _PieLegend(color: colors[i % colors.length], label: partyNames[i]),
+            ],
+          ),
+          SizedBox(height: 10),
+          Text('Total votes: $totalVotes', style: TextStyle(fontSize: 14, color: Colors.orange[900], fontWeight: FontWeight.w500)),
+        ],
+      ),
+    );
+  } 
+}
+
+// Add this widget at the end of the file
+class _ElectionResultsAnalysisCard extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final purple = Theme.of(context).primaryColor;
+    return Container(
+      width: double.infinity,
+      margin: EdgeInsets.only(bottom: 24),
+      padding: EdgeInsets.all(22),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 10, offset: Offset(0, 4))],
+        border: Border(left: BorderSide(color: purple, width: 7)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Icon(Icons.insights, color: purple, size: 28),
+              SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'Election Results & Analysis',
+                  style: TextStyle(fontWeight: FontWeight.w800, fontSize: 20, color: purple),
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: 14),
+          Text(
+            'After the election concludes, you will be able to view detailed results and analysis here. This includes vote breakdowns, turnout trends, and insights into how different groups participated. Stay tuned for a comprehensive post-election report!',
+            style: TextStyle(fontSize: 15, color: Colors.black87),
+          ),
+        ],
+      ),
+    );
+  }
+}

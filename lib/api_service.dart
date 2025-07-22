@@ -68,4 +68,20 @@ class ApiService {
     }
     throw Exception('Backend health check failed');
   }
+
+  Future<Map<String, dynamic>> getTurnoutStats() async {
+    final response = await http.get(Uri.parse('$baseUrl/turnout'));
+    if (response.statusCode == 200) {
+      return json.decode(response.body);
+    }
+    throw Exception('Failed to fetch turnout stats');
+  }
+
+  Future<Map<String, dynamic>> getElectionResults() async {
+    final response = await http.get(Uri.parse('$baseUrl/results'));
+    if (response.statusCode == 200) {
+      return json.decode(response.body);
+    }
+    throw Exception('Failed to fetch election results');
+  }
 } 
